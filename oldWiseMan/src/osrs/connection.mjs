@@ -11,6 +11,7 @@ import logger from '../utility/logger.mjs';
  * @returns {Promise<object>} Status object indicating if online.
  */
 export async function pingOSRS() {
+    const startTime = Date.now();
     try {
         logger.debug('Pinging OSRS Hiscores server...');
         // Using the hiscores main page as a health check target
@@ -21,15 +22,18 @@ export async function pingOSRS() {
             }
         });
         
+        const latency = Date.now() - startTime;
+        
         if (response.status === 200) {
-            logger.debug('OSRS Hiscores server is reachable.');
-            return { online: true, status: response.status };
+            logger.debug(`OSRS Hiscores server is reachable (${latency}ms).`);
+            return { online: true, status: response.status, latency: `${latency}ms` };
         }
         
         logger.warn(`OSRS Hiscores returned status: ${response.status}`);
-        return { online: false, status: response.status };
+        return { online: false, status: response.status, latency: `${latency}ms` };
     } catch (error) {
-        logger.error(`OSRS Ping failed: ${error.message}`);
-        return { online: false, error: error.message };
+        const latency = Date.now() - startTime;
+        logger.error(`OSRS Ping failed after ${latency}ms: ${error.message}`);
+        return { online: false, error: error.message, latency: `${latency}ms` };
     }
 }
