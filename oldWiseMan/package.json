@@ -2,6 +2,9 @@
   "name": "oldWiseMan",
   "version": "1.0.0",
   "description": "A wise man's advice API",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node initmain.mjs"
   },
@@ -14,6 +17,6 @@
     "mongoose": "9.1.5",
     "dotenv": "16.4.7",
     "oldschooljs": "2.6.1",
-    "jsonwebtoken": "9.0.2"
+    "jsonwebtoken": "9.0.3"
   }
 }

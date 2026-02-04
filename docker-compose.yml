@@ -1,0 +1,37 @@
+services:
+  # Bob - Discord Bot
+  bob:
+    build:
+      context: ./bob
+    container_name: bob
+    restart: always
+    env_file:
+      - ./bob/.env
+    # We don't necessarily need to expose ports for a Discord bot as it connects outwards
+
+  # Old Wise Man - API
+  old-wise-man:
+    build:
+      context: ./oldWiseMan
+    container_name: old-wise-man
+    restart: always
+    ports:
+      - "8888:8888"
+    env_file:
+      - ./oldWiseMan/.env
+    # Add dependency on mongodb if we decide to run it locally
+    # depends_on:
+    #   - mongodb
+
+  # Optional: MongoDB service for local development
+  # mongodb:
+  #   image: mongo:latest
+  #   container_name: mongodb
+  #   restart: always
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodb_data:/data/db
+
+# volumes:
+#   mongodb_data:
