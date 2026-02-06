@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node initmain.mjs",
-    "cache:clear": "node scripts/clearCache.mjs"
+    "cache:clear": "node scripts/clearCache.mjs",
+    "profiles:clear": "node scripts/clearProfiles.mjs"
   },
   "dependencies": {
     "express": "5.2.1",

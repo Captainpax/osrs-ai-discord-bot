@@ -3,6 +3,7 @@ import { getCachedHiscores } from '../../osrs/hiscores.mjs';
 import Profile from '../../storage/mongo/models/Profile.mjs';
 import logger from '../../utility/logger.mjs';
 import { pingOSRS } from '../../osrs/connection.mjs';
+import { calculateCombatLevel } from '../../osrs/utils.mjs';
 import { searchWiki, getQuestInfo, getBossInfo } from '../../osrs/wiki.mjs';
 import { getPetInfo } from '../../osrs/pets.mjs';
 import { priceLookupByName } from '../../osrs/prices.mjs';
@@ -58,7 +59,9 @@ router.get('/stats/:identifier', async (req, res) => {
             return res.status(404).json({ error: 'Player not found or no stats available' });
         }
         
-        res.status(200).json({ osrsName: targetOsrsName, ...data, cached, updatedAt });
+        const combatLevel = calculateCombatLevel(data.skills);
+        
+        res.status(200).json({ osrsName: targetOsrsName, ...data, combatLevel, cached, updatedAt });
     } catch (error) {
         const status = error.response?.status || 500;
         if (status === 404) {
@@ -256,8 +259,12 @@ router.get('/wiki/:query', async (req, res) => {
 
         res.status(200).json({ results, cached, updatedAt });
     } catch (error) {
+        const status = error.response?.status || 500;
         logger.error(`Error in wiki route for "${req.params.query}": ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(status).json({ 
+            error: status === 429 ? 'Too many requests to OSRS Wiki. Please try again later.' : 'Internal Server Error', 
+            details: error.message 
+        });
     }
 });
 
@@ -274,8 +281,12 @@ router.get(['/price/:item', '/pricelookup/:item'], async (req, res) => {
         }
         res.status(200).json(result);
     } catch (error) {
+        const status = error.response?.status || 500;
         logger.error(`Error in price lookup for "${req.params.item}": ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(status).json({ 
+            error: status === 429 ? 'Too many requests to OSRS Prices API. Please try again later.' : 'Internal Server Error', 
+            details: error.message 
+        });
     }
 });
 
@@ -294,8 +305,12 @@ router.get('/quest/:name', async (req, res) => {
 
         res.status(200).json(result);
     } catch (error) {
+        const status = error.response?.status || 500;
         logger.error(`Error in quest route for "${req.params.name}": ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(status).json({ 
+            error: status === 429 ? 'Too many requests to OSRS Wiki. Please try again later.' : 'Internal Server Error', 
+            details: error.message 
+        });
     }
 });
 
@@ -320,8 +335,12 @@ router.get('/boss/:name', async (req, res) => {
 
         res.status(200).json(result);
     } catch (error) {
+        const status = error.response?.status || 500;
         logger.error(`Error in boss route for "${req.params.name}": ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(status).json({ 
+            error: status === 429 ? 'Too many requests to OSRS Wiki. Please try again later.' : 'Internal Server Error', 
+            details: error.message 
+        });
     }
 });
 
@@ -346,8 +365,12 @@ router.get('/boss/:name/pet', async (req, res) => {
             pet
         });
     } catch (error) {
+        const status = error.response?.status || 500;
         logger.error(`Error in boss pet route for "${req.params.name}": ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+        res.status(status).json({ 
+            error: status === 429 ? 'Too many requests to OSRS Wiki. Please try again later.' : 'Internal Server Error', 
+            details: error.message 
+        });
     }
 });
 

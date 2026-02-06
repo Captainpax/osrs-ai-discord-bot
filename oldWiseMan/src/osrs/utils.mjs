@@ -22,8 +22,8 @@ export function cleanHiscoresResponse(obj) {
 
     const cleaned = {};
     for (const [key, value] of Object.entries(obj)) {
-        // Skip properties with value -1 as they are considered "useless" (unranked)
-        if (value === -1) {
+        // Skip properties with value -1 or 0 (for score/rank) as they are considered "useless" (unranked)
+        if (value === -1 || ((key === 'score' || key === 'rank') && value === 0)) {
             continue;
         }
         
@@ -38,4 +38,28 @@ export function cleanHiscoresResponse(obj) {
         }
     }
     return cleaned;
+}
+
+/**
+ * @description Calculates OSRS combat level.
+ * @param {object} skills - The skills object from Hiscores.
+ * @returns {number} The combat level.
+ */
+export function calculateCombatLevel(skills) {
+    if (!skills) return 3;
+
+    const def = skills.defence?.level || 1;
+    const hp = skills.hitpoints?.level || 10;
+    const pray = skills.prayer?.level || 1;
+    const att = skills.attack?.level || 1;
+    const str = skills.strength?.level || 1;
+    const ranged = skills.ranged?.level || 1;
+    const magic = skills.magic?.level || 1;
+
+    const base = 0.25 * (def + hp + Math.floor(pray / 2));
+    const melee = 0.325 * (att + str);
+    const range = 0.325 * Math.floor(3 / 2 * ranged);
+    const mage = 0.325 * Math.floor(3 / 2 * magic);
+
+    return Math.floor(base + Math.max(melee, range, mage));
 }
