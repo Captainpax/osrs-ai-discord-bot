@@ -1,4 +1,4 @@
-import { Client } from 'discord.js';
+import { Client, GatewayIntentBits } from 'discord.js';
 import { DISCORD_TOKEN } from '../utility/loadedVariables.mjs';
 import logger from '../utility/logger.mjs';
 
@@ -9,9 +9,9 @@ import logger from '../utility/logger.mjs';
 export const createClient = () => {
     return new Client({
         intents: [
-            'Guilds',
-            'GuildMessages',
-            'MessageContent', 
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildMessages,
+            GatewayIntentBits.MessageContent, 
         ],
     });
 };

@@ -1,10 +1,11 @@
 import express from 'express';
-import { Hiscores } from 'oldschooljs';
+import { getCachedHiscores } from '../../osrs/hiscores.mjs';
 import Profile from '../../storage/mongo/models/Profile.mjs';
 import logger from '../../utility/logger.mjs';
 import { pingOSRS } from '../../osrs/connection.mjs';
-import { cleanHiscoresResponse } from '../../osrs/utils.mjs';
-import { searchWiki } from '../../osrs/wiki.mjs';
+import { searchWiki, getQuestInfo, getBossInfo } from '../../osrs/wiki.mjs';
+import { getPetInfo } from '../../osrs/pets.mjs';
+import { priceLookupByName } from '../../osrs/prices.mjs';
 
 const router = express.Router();
 
@@ -18,6 +19,7 @@ async function resolveOsrsName(identifier) {
     const profile = await Profile.findOne({
         $or: [
             { uuid: identifier },
+            { discordId: identifier },
             { username: identifier },
             { osrsName: identifier }
         ]
@@ -50,17 +52,28 @@ router.get('/stats/:identifier', async (req, res) => {
         const targetOsrsName = await resolveOsrsName(identifier);
 
         logger.debug(`Fetching OSRS stats for ${targetOsrsName}`);
-        const stats = await Hiscores.fetch(targetOsrsName);
+        const { data, updatedAt, cached } = await getCachedHiscores(targetOsrsName);
         
-        if (!stats) {
+        if (!data) {
             return res.status(404).json({ error: 'Player not found or no stats available' });
         }
         
-        const cleanedStats = cleanHiscoresResponse(stats);
-        res.status(200).json(cleanedStats);
+        res.status(200).json({ osrsName: targetOsrsName, ...data, cached, updatedAt });
     } catch (error) {
+        const status = error.response?.status || 500;
+        if (status === 404) {
+            return res.status(404).json({ error: 'Player not found on OSRS hiscores' });
+        }
+        if (status === 429) {
+            return res.status(429).json({ error: 'Too many requests to OSRS hiscores. Please try again later.' });
+        }
+        
         logger.error(`Error fetching stats for ${req.params.identifier}: ${error.message}`);
-        res.status(500).json({ error: 'Failed to fetch OSRS stats from Hiscores' });
+        if (error.stack) logger.debug(error.stack);
+        res.status(status).json({ 
+            error: status === 500 ? 'Failed to fetch OSRS stats from Hiscores' : `OSRS Hiscores returned error ${status}`, 
+            details: error.message 
+        });
     }
 });
 
@@ -73,22 +86,35 @@ router.get('/stats/:identifier/skill/:skill', async (req, res) => {
         const { identifier, skill } = req.params;
         const targetOsrsName = await resolveOsrsName(identifier);
 
-        const stats = await Hiscores.fetch(targetOsrsName);
-        if (!stats) return res.status(404).json({ error: 'Player not found' });
+        const { data, updatedAt, cached } = await getCachedHiscores(targetOsrsName);
+        if (!data) return res.status(404).json({ error: 'Player not found' });
 
-        const cleaned = cleanHiscoresResponse(stats);
-        if (!cleaned.skills || !cleaned.skills[skill]) {
+        if (!data.skills || !data.skills[skill]) {
             return res.status(404).json({ error: `Skill "${skill}" not found or unranked` });
         }
 
         res.status(200).json({
             osrsName: targetOsrsName,
             skill,
-            ...cleaned.skills[skill]
+            ...data.skills[skill],
+            cached,
+            updatedAt
         });
     } catch (error) {
+        const status = error.response?.status || 500;
+        if (status === 404) {
+            return res.status(404).json({ error: 'Player not found on OSRS hiscores' });
+        }
+        if (status === 429) {
+            return res.status(429).json({ error: 'Too many requests to OSRS hiscores. Please try again later.' });
+        }
+        
         logger.error(`Error fetching skill ${req.params.skill} for ${req.params.identifier}: ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error' });
+        if (error.stack) logger.debug(error.stack);
+        res.status(status).json({ 
+            error: status === 500 ? 'Internal Server Error' : `OSRS Hiscores returned error ${status}`, 
+            details: error.message 
+        });
     }
 });
 
@@ -101,22 +127,35 @@ router.get('/stats/:identifier/boss/:boss', async (req, res) => {
         const { identifier, boss } = req.params;
         const targetOsrsName = await resolveOsrsName(identifier);
 
-        const stats = await Hiscores.fetch(targetOsrsName);
-        if (!stats) return res.status(404).json({ error: 'Player not found' });
+        const { data, updatedAt, cached } = await getCachedHiscores(targetOsrsName);
+        if (!data) return res.status(404).json({ error: 'Player not found' });
 
-        const cleaned = cleanHiscoresResponse(stats);
-        if (!cleaned.bossRecords || !cleaned.bossRecords[boss]) {
+        if (!data.bossRecords || !data.bossRecords[boss]) {
             return res.status(404).json({ error: `Boss "${boss}" not found or unranked` });
         }
 
         res.status(200).json({
             osrsName: targetOsrsName,
             boss,
-            ...cleaned.bossRecords[boss]
+            ...data.bossRecords[boss],
+            cached,
+            updatedAt
         });
     } catch (error) {
+        const status = error.response?.status || 500;
+        if (status === 404) {
+            return res.status(404).json({ error: 'Player not found on OSRS hiscores' });
+        }
+        if (status === 429) {
+            return res.status(429).json({ error: 'Too many requests to OSRS hiscores. Please try again later.' });
+        }
+        
         logger.error(`Error fetching boss ${req.params.boss} for ${req.params.identifier}: ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error' });
+        if (error.stack) logger.debug(error.stack);
+        res.status(status).json({ 
+            error: status === 500 ? 'Internal Server Error' : `OSRS Hiscores returned error ${status}`, 
+            details: error.message 
+        });
     }
 });
 
@@ -129,22 +168,35 @@ router.get('/stats/:identifier/clues/:clue', async (req, res) => {
         const { identifier, clue } = req.params;
         const targetOsrsName = await resolveOsrsName(identifier);
 
-        const stats = await Hiscores.fetch(targetOsrsName);
-        if (!stats) return res.status(404).json({ error: 'Player not found' });
+        const { data, updatedAt, cached } = await getCachedHiscores(targetOsrsName);
+        if (!data) return res.status(404).json({ error: 'Player not found' });
 
-        const cleaned = cleanHiscoresResponse(stats);
-        if (!cleaned.clues || !cleaned.clues[clue]) {
+        if (!data.clues || !data.clues[clue]) {
             return res.status(404).json({ error: `Clue tier "${clue}" not found or unranked` });
         }
 
         res.status(200).json({
             osrsName: targetOsrsName,
             clue,
-            ...cleaned.clues[clue]
+            ...data.clues[clue],
+            cached,
+            updatedAt
         });
     } catch (error) {
+        const status = error.response?.status || 500;
+        if (status === 404) {
+            return res.status(404).json({ error: 'Player not found on OSRS hiscores' });
+        }
+        if (status === 429) {
+            return res.status(429).json({ error: 'Too many requests to OSRS hiscores. Please try again later.' });
+        }
+        
         logger.error(`Error fetching clue ${req.params.clue} for ${req.params.identifier}: ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error' });
+        if (error.stack) logger.debug(error.stack);
+        res.status(status).json({ 
+            error: status === 500 ? 'Internal Server Error' : `OSRS Hiscores returned error ${status}`, 
+            details: error.message 
+        });
     }
 });
 
@@ -157,22 +209,35 @@ router.get('/stats/:identifier/minigames/:minigame', async (req, res) => {
         const { identifier, minigame } = req.params;
         const targetOsrsName = await resolveOsrsName(identifier);
 
-        const stats = await Hiscores.fetch(targetOsrsName);
-        if (!stats) return res.status(404).json({ error: 'Player not found' });
+        const { data, updatedAt, cached } = await getCachedHiscores(targetOsrsName);
+        if (!data) return res.status(404).json({ error: 'Player not found' });
 
-        const cleaned = cleanHiscoresResponse(stats);
-        if (!cleaned.minigames || !cleaned.minigames[minigame]) {
+        if (!data.minigames || !data.minigames[minigame]) {
             return res.status(404).json({ error: `Minigame "${minigame}" not found or unranked` });
         }
 
         res.status(200).json({
             osrsName: targetOsrsName,
             minigame,
-            ...cleaned.minigames[minigame]
+            ...data.minigames[minigame],
+            cached,
+            updatedAt
         });
     } catch (error) {
+        const status = error.response?.status || 500;
+        if (status === 404) {
+            return res.status(404).json({ error: 'Player not found on OSRS hiscores' });
+        }
+        if (status === 429) {
+            return res.status(429).json({ error: 'Too many requests to OSRS hiscores. Please try again later.' });
+        }
+        
         logger.error(`Error fetching minigame ${req.params.minigame} for ${req.params.identifier}: ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error' });
+        if (error.stack) logger.debug(error.stack);
+        res.status(status).json({ 
+            error: status === 500 ? 'Internal Server Error' : `OSRS Hiscores returned error ${status}`, 
+            details: error.message 
+        });
     }
 });
 
@@ -183,16 +248,106 @@ router.get('/stats/:identifier/minigames/:minigame', async (req, res) => {
 router.get('/wiki/:query', async (req, res) => {
     try {
         const { query } = req.params;
-        const results = await searchWiki(query);
+        const { results, cached, updatedAt } = await searchWiki(query);
         
-        if (results.length === 0) {
+        if (!results || results.length === 0) {
             return res.status(404).json({ error: 'No wiki results found' });
         }
 
-        res.status(200).json(results);
+        res.status(200).json({ results, cached, updatedAt });
     } catch (error) {
         logger.error(`Error in wiki route for "${req.params.query}": ${error.message}`);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+/**
+ * @route GET /osrs/price/:item or /osrs/pricelookup/:item
+ * @description Looks up latest GE price for item by name. Caches for 1 day.
+ */
+router.get(['/price/:item', '/pricelookup/:item'], async (req, res) => {
+    try {
+        const { item } = req.params;
+        const result = await priceLookupByName(item);
+        if (result.notFound) {
+            return res.status(404).json({ error: result.message, query: result.query });
+        }
+        res.status(200).json(result);
+    } catch (error) {
+        logger.error(`Error in price lookup for "${req.params.item}": ${error.message}`);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+/**
+ * @route GET /osrs/quest/:name
+ * @description Fetches quest information and wiki link.
+ */
+router.get('/quest/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const result = await getQuestInfo(name);
+        
+        if (result.notFound) {
+            return res.status(404).json({ error: `Quest "${name}" not found.` });
+        }
+
+        res.status(200).json(result);
+    } catch (error) {
+        logger.error(`Error in quest route for "${req.params.name}": ${error.message}`);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+/**
+ * @route GET /osrs/boss/:name
+ * @description Fetches boss information and wiki link.
+ */
+router.get('/boss/:name', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const result = await getBossInfo(name);
+        
+        if (result.notFound) {
+            return res.status(404).json({ error: `Boss "${name}" not found.` });
+        }
+
+        // Add pet info if available
+        const pet = getPetInfo(result.title);
+        if (pet) {
+            result.pet = pet;
+        }
+
+        res.status(200).json(result);
+    } catch (error) {
+        logger.error(`Error in boss route for "${req.params.name}": ${error.message}`);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    }
+});
+
+/**
+ * @route GET /osrs/boss/:name/pet
+ * @description Fetches pet information for a specific boss.
+ */
+router.get('/boss/:name/pet', async (req, res) => {
+    try {
+        const { name } = req.params;
+        const bossResult = await getBossInfo(name);
+        
+        const title = bossResult.notFound ? name : bossResult.title;
+        const pet = getPetInfo(title);
+
+        if (!pet) {
+            return res.status(404).json({ error: `Pet info for boss "${title}" not found.` });
+        }
+
+        res.status(200).json({
+            boss: title,
+            pet
+        });
+    } catch (error) {
+        logger.error(`Error in boss pet route for "${req.params.name}": ${error.message}`);
+        res.status(500).json({ error: 'Internal Server Error', details: error.message });
     }
 });
 

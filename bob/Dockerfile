@@ -12,5 +12,8 @@ RUN npm install --production
 # Bundle app source
 COPY . .
 
+# Expose the port the app runs on
+EXPOSE 8889
+
 # Start the bot
 CMD [ "npm", "start" ]

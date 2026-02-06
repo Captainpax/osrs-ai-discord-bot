@@ -6,13 +6,13 @@ This monorepo contains multiple services that together power an OSRS AI experien
 
 - `bob/` — Discord bot client (slash commands, interactions)
 - `oldWiseMan/` — API and backend service (HTTP, DB, business logic)
-- `kingRoald/` — WIP
+- `kingRoald/` — Secondary Discord bot and service
 
 ## Requirements
 
 - Docker + Docker Compose (recommended way to run everything)
 - OR Node.js 22+ for local development (services enforce this via `engines`)
-- `.env` files in `bob/` and `oldWiseMan/` (use their `.env.example` templates)
+- Centralized `.env` file in the project root (use `.env.example` template)
 
 ## Quick Start (Docker Compose)
 
@@ -21,8 +21,9 @@ From the repository root:
 docker-compose up --build
 ```
 This will build images (using Node 22 base images) and start:
-- `bob` (Discord bot)
+- `bob` (Discord bot on port 8889)
 - `old-wise-man` (API on port 8888)
+- `king-roald` (Discord bot on port 8890)
 
 To stop and remove containers:
 ```bash

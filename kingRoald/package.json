@@ -1,0 +1,33 @@
+{
+  "name": "king-roald",
+  "version": "1.0.0",
+  "description": "King Roald service for OSRS AI",
+  "main": "initmain.mjs",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node initmain.mjs"
+  },
+  "dependencies": {
+    "@langchain/community": "^1.1.11",
+    "@langchain/core": "1.1.19",
+    "@langchain/mongodb": "1.1.0",
+    "@langchain/openai": "1.2.4",
+    "axios": "1.13.4",
+    "body-parser": "2.2.2",
+    "chalk": "5.6.2",
+    "discord.js": "^14.25.1",
+    "dotenv": "16.4.7",
+    "express": "5.2.1",
+    "jsonwebtoken": "9.0.3",
+    "mathjs": "15.1.0",
+    "mongoose": "9.1.6",
+    "openai": "^6.16.0",
+    "zod": "^3.25.76"
+  },
+  "overrides": {
+    "openai": "^6.16.0"
+  }
+}

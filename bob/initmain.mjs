@@ -2,8 +2,12 @@ import { createClient, loginClient } from './src/discord/connection.mjs';
 import { registerCommands } from './src/discord/commands.mjs';
 import { setupInteractionHandler, setupMessageListener } from './src/discord/messageIO.mjs';
 import logger from './src/utility/logger.mjs';
+import app from './src/api/api.mjs';
+import { connectDB, disconnectDB } from './src/storage/mongo/connection.mjs';
+import { PORT } from './src/utility/loadedVariables.mjs';
 
 let client;
+let server;
 
 /**
  * @description Main entry point for the Bob Discord Bot.
@@ -13,6 +17,14 @@ async function main() {
     logger.info('Starting Bob Discord Bot bootup...');
 
     try {
+        // Initialize MongoDB connection
+        await connectDB();
+
+        // Start REST API
+        server = app.listen(PORT, () => {
+            logger.info(`REST API is running on port ${PORT}`);
+        });
+
         // Register slash commands
         await registerCommands();
 
@@ -46,11 +58,19 @@ async function gracefulShutdown(signal) {
     }, 10000);
 
     try {
+        if (server) {
+            logger.info('Closing HTTP server...');
+            await new Promise((resolve) => server.close(resolve));
+            logger.info('HTTP server closed.');
+        }
+
         if (client) {
             logger.info('Destroying Discord client...');
             client.destroy();
             logger.info('Discord client destroyed.');
         }
+
+        await disconnectDB();
 
         clearTimeout(shutdownTimeout);
         logger.info('Graceful shutdown completed.');
@@ -77,7 +97,7 @@ process.on('uncaughtException', (error) => {
     if (client) {
         client.destroy();
     }
-    process.exit(1);
+    disconnectDB().finally(() => process.exit(1));
 });
 
 main();

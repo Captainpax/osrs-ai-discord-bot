@@ -5,9 +5,14 @@ services:
       context: ./bob
     container_name: bob
     restart: always
+    ports:
+      - "8889:8889"
+    environment:
+      - PORT=8889
     env_file:
-      - ./bob/.env
-    # We don't necessarily need to expose ports for a Discord bot as it connects outwards
+      - ./.env
+    networks:
+      - osrs-network
 
   # Old Wise Man - API
   old-wise-man:
@@ -17,8 +22,27 @@ services:
     restart: always
     ports:
       - "8888:8888"
+    environment:
+      - OLD_WISE_MAN_PORT=8888
     env_file:
-      - ./oldWiseMan/.env
+      - ./.env
+    networks:
+      - osrs-network
+
+  # King Roald
+  king-roald:
+    build:
+      context: ./kingRoald
+    container_name: king-roald
+    restart: always
+    ports:
+      - "8890:8890"
+    environment:
+      - PORT=8890
+    env_file:
+      - ./.env
+    networks:
+      - osrs-network
     # Add dependency on mongodb if we decide to run it locally
     # depends_on:
     #   - mongodb
@@ -30,8 +54,14 @@ services:
   #   restart: always
   #   ports:
   #     - "27017:27017"
+  #   networks:
+  #     - osrs-network
   #   volumes:
   #     - mongodb_data:/data/db
+
+networks:
+  osrs-network:
+    driver: bridge
 
 # volumes:
 #   mongodb_data:

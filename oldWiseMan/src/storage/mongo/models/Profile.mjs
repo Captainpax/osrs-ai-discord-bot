@@ -17,6 +17,11 @@ const profileSchema = new mongoose.Schema({
         unique: true,
         index: true 
     },
+    discordId: {
+        type: String,
+        unique: true,
+        index: true
+    },
     username: { 
         type: String, 
         required: true 

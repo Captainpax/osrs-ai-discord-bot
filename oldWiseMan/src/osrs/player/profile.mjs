@@ -1,6 +1,5 @@
 import Profile from '../../storage/mongo/models/Profile.mjs';
-import { Hiscores } from 'oldschooljs';
-import { cleanHiscoresResponse } from '../utils.mjs';
+import { getCachedHiscores } from '../hiscores.mjs';
 import logger from '../../utility/logger.mjs';
 
 /**
@@ -24,9 +23,9 @@ export async function getFullProfile(uuid) {
         let osrsStats = null;
         if (profile.osrsName) {
             logger.debug(`Fetching OSRS stats for linked name: ${profile.osrsName}`);
-            const rawStats = await Hiscores.fetch(profile.osrsName);
-            if (rawStats) {
-                osrsStats = cleanHiscoresResponse(rawStats);
+            const { data } = await getCachedHiscores(profile.osrsName);
+            if (data) {
+                osrsStats = data;
             }
         }
 

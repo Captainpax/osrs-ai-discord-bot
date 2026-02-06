@@ -10,14 +10,13 @@ Bob is the Discord bot client in the OSRS AI project. It connects to Discord, re
 
 ## Environment Variables
 
-Copy the example file and fill in your values:
-```bash
-cp .env.example .env
-```
-- `DISCORD_TOKEN` — Your bot token
-- `DISCORD_CLIENT_ID` — Your application (client) ID
-- `DISCORD_GUILD_ID` — Optional: a test guild ID for instant slash-command updates during development
+This service uses the centralized `.env` file in the project root.
+- `BOB_DISCORD_TOKEN` — Your bot token
+- `BOB_DISCORD_CLIENT_ID` — Your application (client) ID
+- `BOB_DISCORD_GUILD_ID` — Optional: a test guild ID for instant slash-command updates during development
 - `DEBUG` — Optional: set to `true` for verbose logs
+- `BOB_PORT` — The port for the health check API (default 8889)
+- `OPENAI_API_KEY` — Required for LangChain OpenAI models
 
 ## Local Setup (Node 22)
 
@@ -47,7 +46,7 @@ docker run --env-file ./.env --name bob osrs-bob
 
 ## Commands
 
-- `/ping` — Replies with "Pong!"
+- `/bob-ping` — Replies with "Bob says Pong!"
 
 ## Notes
 

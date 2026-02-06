@@ -34,7 +34,7 @@ A robust Node.js 22 API for Old School RuneScape (OSRS) integration, profile man
 Create a `.env` file in the `oldWiseMan` root directory with the following variables:
 
 ```env
-PORT=8888
+OLD_WISE_MAN_PORT=8888
 DEBUG=true
 MONGODB_URI=mongodb://your-mongodb-uri
 JWT_SECRET=your-secure-secret-key
@@ -48,7 +48,7 @@ To start the server:
 npm start
 ```
 
-The server will initialize the MongoDB connection and start listening on the configured `PORT`.
+The server will initialize the MongoDB connection and start listening on the configured `OLD_WISE_MAN_PORT`.
 
 ## API Documentation
 
@@ -140,6 +140,16 @@ All stats endpoints support `identifier` as a `uuid`, `username`, or `osrsName`.
 
 #### Get Settings
 - **URL**: `GET /settings/server/:guildId`
+
+## Caching
+
+The API uses a MongoDB-backed caching system for OSRS Wiki data and GE prices to reduce external API load and improve performance.
+
+- **Storage**: Cached data is stored in the `caches` collection.
+- **TTL**: Entries automatically expire from the database after 7 days (managed by MongoDB TTL index).
+- **Cleanup**: You can manually clear the cache using npm scripts:
+  - `npm run cache:clear` — Clears the entire cache.
+  - `npm run cache:clear <prefix>` — Clears entries starting with a specific prefix (e.g., `osrs:wiki:`).
 
 ## Project Structure
 

@@ -1,7 +1,7 @@
 import app from './src/api/api.mjs';
 import logger from './src/utility/logger.mjs';
 import { connectDB, disconnectDB } from './src/storage/mongo/connection.mjs';
-import { PORT } from './src/utility/loadedVariables.mjs';
+import { OLD_WISE_MAN_PORT } from './src/utility/loadedVariables.mjs';
 
 let server;
 
@@ -16,8 +16,8 @@ async function init() {
         // Initialize MongoDB connection
         await connectDB();
 
-        server = app.listen(PORT, () => {
-            logger.info(`Server is running on port ${PORT}`);
+        server = app.listen(OLD_WISE_MAN_PORT, () => {
+            logger.info(`Server is running on port ${OLD_WISE_MAN_PORT}`);
             logger.info('Clean boot sequence completed.');
         });
     } catch (error) {

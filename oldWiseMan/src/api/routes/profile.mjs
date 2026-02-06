@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { Hiscores } from 'oldschooljs';
+import crypto from 'crypto';
+import { getCachedHiscores } from '../../osrs/hiscores.mjs';
 import Profile from '../../storage/mongo/models/Profile.mjs';
 import logger from '../../utility/logger.mjs';
 import { JWT_SECRET } from '../../utility/loadedVariables.mjs';
@@ -15,20 +16,34 @@ const router = express.Router();
  */
 router.post('/create', async (req, res) => {
     try {
-        const { uuid, username } = req.body;
-        if (!uuid || !username) {
-            return res.status(400).json({ error: 'uuid and username are required' });
+        const { uuid, username, discordId } = req.body;
+        if (!username) {
+            return res.status(400).json({ error: 'username is required' });
         }
 
-        const existing = await Profile.findOne({ uuid });
-        if (existing) {
-            return res.status(409).json({ error: 'Profile already exists' });
+        if (!uuid && !discordId) {
+            return res.status(400).json({ error: 'either uuid or discordId is required' });
         }
 
-        const profile = new Profile({ uuid, username });
+        if (discordId) {
+            const existingByDiscord = await Profile.findOne({ discordId });
+            if (existingByDiscord) {
+                return res.status(409).json({ error: 'Profile already exists for this discordId' });
+            }
+        }
+
+        if (uuid) {
+            const existing = await Profile.findOne({ uuid });
+            if (existing) {
+                return res.status(409).json({ error: 'Profile already exists' });
+            }
+        }
+
+        const finalUuid = uuid || crypto.randomUUID();
+        const profile = new Profile({ uuid: finalUuid, username, discordId });
         await profile.save();
 
-        logger.info(`Profile created for ${username} (${uuid})`);
+        logger.info(`Profile created for ${username} (${finalUuid})`);
         res.status(201).json(profile);
     } catch (error) {
         logger.error(`Error creating profile: ${error.message}`);
@@ -43,13 +58,14 @@ router.post('/create', async (req, res) => {
  */
 router.post('/login', async (req, res) => {
     try {
-        const { uuid } = req.body;
-        if (!uuid) {
-            return res.status(400).json({ error: 'uuid is required' });
+        const { uuid, discordId } = req.body;
+        if (!uuid && !discordId) {
+            return res.status(400).json({ error: 'uuid or discordId is required' });
         }
 
+        const query = uuid ? { uuid } : { discordId };
         const profile = await Profile.findOneAndUpdate(
-            { uuid },
+            query,
             { isLoggedIn: true, lastLogin: new Date() },
             { new: true }
         );
@@ -58,7 +74,7 @@ router.post('/login', async (req, res) => {
             return res.status(404).json({ error: 'Profile not found' });
         }
 
-        logger.info(`User ${profile.username} (${uuid}) logged in`);
+        logger.info(`User ${profile.username} (${profile.uuid}) logged in`);
         
         // Generate JWT token
         const token = jwt.sign({ uuid: profile.uuid, username: profile.username }, JWT_SECRET, { expiresIn: '24h' });
@@ -129,13 +145,19 @@ router.delete('/delete', authenticateToken, async (req, res) => {
 /**
  * @route POST /profile/link
  * @description Links an OSRS username to a database profile. Requires JWT authentication.
- * @body { "uuid": "12345", "osrsName": "Zezima" }
+ * @body { "uuid": "12345", "osrsName": "Zezima" } (uuid optional if JWT provided)
  */
 router.post('/link', authenticateToken, async (req, res) => {
     try {
-        const { uuid, osrsName } = req.body;
-        if (!uuid || !osrsName) {
-            return res.status(400).json({ error: 'uuid and osrsName are required' });
+        let { uuid, osrsName } = req.body;
+        if (!osrsName) {
+            return res.status(400).json({ error: 'osrsName is required' });
+        }
+        if (!uuid && req.user?.uuid) {
+            uuid = req.user.uuid;
+        }
+        if (!uuid) {
+            return res.status(400).json({ error: 'uuid is required (or supply JWT with uuid)' });
         }
 
         const profile = await Profile.findOneAndUpdate(
@@ -178,7 +200,7 @@ router.post('/levels', async (req, res) => {
         }
 
         logger.debug(`Fetching OSRS levels for ${profile.osrsName} (${uuid})`);
-        const stats = await Hiscores.fetch(profile.osrsName);
+        const { data: stats, cached, updatedAt } = await getCachedHiscores(profile.osrsName);
 
         if (!stats) {
             return res.status(404).json({ error: 'Player stats not found' });
@@ -193,10 +215,72 @@ router.post('/levels', async (req, res) => {
         res.status(200).json({
             osrsName: profile.osrsName,
             levels: levels,
-            totalLevel: stats.skills.overall.level
+            totalLevel: stats.skills?.overall?.level || 'N/A',
+            cached,
+            updatedAt
         });
     } catch (error) {
         logger.error(`Error fetching levels for profile ${req.body.uuid}: ${error.message}`);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+/**
+ * @route POST /profile/ensure
+ * @description Creates a profile if missing (by discordId) and returns JWT token. Also marks logged-in.
+ * @body { "discordId": "123", "username": "Name" }
+ */
+router.post('/ensure', async (req, res) => {
+    try {
+        const { discordId, username } = req.body;
+        if (!discordId || !username) {
+            return res.status(400).json({ error: 'discordId and username are required' });
+        }
+
+        let profile = await Profile.findOne({ discordId });
+        let created = false;
+        if (!profile) {
+            const uuid = crypto.randomUUID();
+            profile = new Profile({ uuid, discordId, username, isLoggedIn: true, lastLogin: new Date() });
+            await profile.save();
+            created = true;
+            logger.info(`Created new profile for discordId ${discordId} with uuid ${uuid}`);
+        } else {
+            // mark logged in
+            profile.isLoggedIn = true;
+            profile.lastLogin = new Date();
+            // Optionally update username if changed
+            if (username && username !== profile.username) profile.username = username;
+            await profile.save();
+        }
+
+        const token = jwt.sign({ uuid: profile.uuid, username: profile.username }, JWT_SECRET, { expiresIn: '24h' });
+        res.status(200).json({ profile, token, created });
+    } catch (error) {
+        logger.error(`Error ensuring profile: ${error.message}`);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+/**
+ * @route POST /profile/unlink
+ * @description Unlinks OSRS username from the profile. Requires JWT.
+ */
+router.post('/unlink', authenticateToken, async (req, res) => {
+    try {
+        const uuid = req.user?.uuid || req.body?.uuid;
+        if (!uuid) return res.status(400).json({ error: 'uuid is required (via JWT or body)' });
+
+        const profile = await Profile.findOneAndUpdate(
+            { uuid },
+            { osrsName: null },
+            { new: true }
+        );
+        if (!profile) return res.status(404).json({ error: 'Profile not found' });
+        logger.info(`Unlinked OSRS account for profile ${uuid}`);
+        res.status(200).json(profile);
+    } catch (error) {
+        logger.error(`Error unlinking profile: ${error.message}`);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

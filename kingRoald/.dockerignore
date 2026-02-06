@@ -1,0 +1,5 @@
+# Prevent host deps and secrets from being copied into the image
+node_modules
+npm-debug.log
+.env
+.git
