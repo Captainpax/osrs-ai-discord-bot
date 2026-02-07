@@ -40,6 +40,18 @@ const profileSchema = new mongoose.Schema({
     },
     lastLogin: { 
         type: Date 
+    },
+    lastStats: {
+        type: Object,
+        default: null
+    },
+    weeklyStats: {
+        type: Object,
+        default: null
+    },
+    weeklyResetDate: {
+        type: Date,
+        default: null
     }
 });
 

@@ -13,6 +13,11 @@ services:
       - ./.env
     networks:
       - osrs-network
+    depends_on:
+      old-wise-man:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
 
   # Old Wise Man - API
   old-wise-man:
@@ -28,6 +33,12 @@ services:
       - ./.env
     networks:
       - osrs-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8888/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # King Roald
   king-roald:
@@ -43,9 +54,40 @@ services:
       - ./.env
     networks:
       - osrs-network
+    depends_on:
+      old-wise-man:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
     # Add dependency on mongodb if we decide to run it locally
     # depends_on:
     #   - mongodb
+
+  # n8n - Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: always
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_PORT=5678
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - NODE_NO_WARNINGS=1
+      - AI_BASE_URL=${AI_BASE_URL}
+      - AI_MODEL=${AI_MODEL}
+    env_file:
+      - ./.env
+    networks:
+      - osrs-network
+    volumes:
+      - n8n_data:/home/node/.n8n
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5678/healthz').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   # Optional: MongoDB service for local development
   # mongodb:
@@ -65,3 +107,5 @@ networks:
 
 # volumes:
 #   mongodb_data:
+volumes:
+  n8n_data:

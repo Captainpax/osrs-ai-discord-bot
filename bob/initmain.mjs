@@ -1,10 +1,12 @@
 import { createClient, loginClient } from './src/discord/connection.mjs';
 import { registerCommands } from './src/discord/commands.mjs';
-import { setupInteractionHandler, setupMessageListener } from './src/discord/messageIO.mjs';
+import { setupInteractionHandler, setupMessageListener, handleAiResponse } from './src/discord/messageIO.mjs';
+import { initScheduler, runLeaderboardUpdate } from './src/discord/scheduler.mjs';
 import logger from './src/utility/logger.mjs';
 import app from './src/api/api.mjs';
 import { connectDB, disconnectDB } from './src/storage/mongo/connection.mjs';
 import { PORT } from './src/utility/loadedVariables.mjs';
+import { ensureWorkflowExists } from './src/ai/n8n/index.mjs';
 
 let client;
 let server;
@@ -20,10 +22,8 @@ async function main() {
         // Initialize MongoDB connection
         await connectDB();
 
-        // Start REST API
-        server = app.listen(PORT, () => {
-            logger.info(`REST API is running on port ${PORT}`);
-        });
+        // Ensure n8n workflow exists
+        await ensureWorkflowExists();
 
         // Register slash commands
         await registerCommands();
@@ -31,12 +31,44 @@ async function main() {
         // Create Discord client
         client = createClient();
 
+        // Add admin routes that need the client
+        app.post('/admin/push-leaderboard', async (req, res) => {
+            try {
+                logger.info('Manual leaderboard push triggered via API');
+                await runLeaderboardUpdate(client);
+                res.status(200).json({ message: 'Leaderboard push initiated' });
+            } catch (err) {
+                logger.error(`Error in manual leaderboard push: ${err.message}`);
+                res.status(500).json({ error: 'Failed to push leaderboard' });
+            }
+        });
+
+        // Add AI callback route
+        app.post('/ai/callback', async (req, res) => {
+            try {
+                logger.debug(`AI Callback received: ${JSON.stringify(req.body)}`);
+                await handleAiResponse(client, req.body);
+                res.status(200).json({ status: 'received' });
+            } catch (err) {
+                logger.error(`Error in AI callback: ${err.message}`);
+                res.status(500).json({ error: 'Internal server error during callback' });
+            }
+        });
+
+        // Start REST API
+        server = app.listen(PORT, () => {
+            logger.info(`REST API is running on port ${PORT}`);
+        });
+
         // Setup handlers
         setupInteractionHandler(client);
         setupMessageListener(client);
 
         // Login
         await loginClient(client);
+
+        // Start periodic tasks
+        initScheduler(client);
 
         logger.info('Clean boot sequence completed.');
     } catch (error) {

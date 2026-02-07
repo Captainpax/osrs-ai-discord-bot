@@ -17,10 +17,12 @@ export const OLD_WISE_MAN_PORT = process.env.OLD_WISE_MAN_PORT || process.env.PO
 export const DEBUG = process.env.DEBUG === 'true';
 export const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/oldWiseMan';
 export const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret';
+export const N8N_API_KEY = process.env.N8N_API_KEY;
 
 export default {
     OLD_WISE_MAN_PORT,
     DEBUG,
     MONGODB_URI,
-    JWT_SECRET
+    JWT_SECRET,
+    N8N_API_KEY
 };

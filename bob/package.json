@@ -8,7 +8,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "start": "node initmain.mjs"
+    "start": "node initmain.mjs",
+    "test:n8n-setup": "node scripts/test-n8n-setup.mjs",
+    "test:n8n-webhook": "node scripts/test-n8n-webhook.mjs",
+    "test:ai-callback": "node scripts/test-ai-callback.mjs"
   },
   "dependencies": {
     "@langchain/community": "^1.1.11",

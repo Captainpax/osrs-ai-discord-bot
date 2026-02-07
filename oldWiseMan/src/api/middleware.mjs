@@ -5,7 +5,7 @@ import Profile from '../storage/mongo/models/Profile.mjs';
 
 /**
  * @description Middleware to authenticate JWT token and ensure user is logged in.
- * Checks for token in Authorization header (Bearer token).
+ * Checks for a token in the Authorization header (Bearer token).
  */
 export const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers['authorization'];

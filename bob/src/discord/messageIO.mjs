@@ -1,6 +1,8 @@
-import { MessageFlags, EmbedBuilder } from 'discord.js';
+import { MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import logger from '../utility/logger.mjs';
-import { ensureProfileAndToken, linkOsrsName, unlinkOsrsName, getStats, priceLookup, getQuest, getBoss, getBossStats, getBossPet } from '../utility/wiseApi.mjs';
+import { BOBS_CHAT } from '../utility/loadedVariables.mjs';
+import { ensureProfileAndToken, linkOsrsName, unlinkOsrsName, getStats, priceLookup, getQuest, searchQuests, getBoss, searchBosses, getBossStats, getBossPet, searchWiki, getWikiPage } from '../utility/wiseApi.mjs';
+import { askN8N } from '../ai/n8n/index.mjs';
 
 const SKILL_EMOJIS = {
     attack: '⚔️',
@@ -29,12 +31,306 @@ const SKILL_EMOJIS = {
     overall: '🏆'
 };
 
+const SKILL_LAYOUT = [
+    ['attack', 'strength', 'defence', 'ranged', 'prayer', 'magic', 'runecraft', 'construction'],
+    ['hitpoints', 'agility', 'herblore', 'thieving', 'crafting', 'fletching', 'slayer', 'hunter'],
+    ['mining', 'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'farming', 'overall']
+];
+
+/**
+ * @description Renders the stats embed.
+ */
+function renderStatsEmbed(data) {
+    const totalLevel = data.totalLevel || data.skills?.overall?.level || 'N/A';
+    const totalXp = data.totalXP || data.skills?.overall?.xp || 0;
+    const combatLevel = data.combatLevel || 'N/A';
+
+    const embed = new EmbedBuilder()
+        .setTitle(`📊 OSRS Stats for ${data.osrsName}`)
+        .setURL(`https://services.runescape.com/m=hiscore_oldschool/hiscorepersonal.ws?user1=${encodeURIComponent(data.osrsName)}`)
+        .setDescription(`**Combat Level: ${combatLevel}**\n**Total Level: ${totalLevel}**\n**Total XP: ${totalXp.toLocaleString()}**`)
+        .setColor(0x0099FF)
+        .setTimestamp(data.updatedAt ? new Date(data.updatedAt) : new Date());
+
+    const skills = data.skills;
+    if (skills) {
+        SKILL_LAYOUT.forEach(col => {
+            let text = '';
+            col.forEach(s => {
+                const val = skills[s];
+                const emoji = SKILL_EMOJIS[s] || '';
+                const level = val?.level ?? (s === 'overall' ? totalLevel : '1');
+                text += `${emoji} **${level}**\n`;
+            });
+            embed.addFields({ name: '\u200B', value: text, inline: true });
+        });
+    }
+
+    if (data.cached) {
+        embed.setFooter({ text: 'Data is cached' });
+    }
+
+    return embed;
+}
+
+/**
+ * @description Renders the legend embed.
+ */
+function renderLegendEmbed(data) {
+    const embed = new EmbedBuilder()
+        .setTitle(`📖 Emoji Legend for ${data.osrsName}`)
+        .setColor(0x0099FF)
+        .setTimestamp(data.updatedAt ? new Date(data.updatedAt) : new Date());
+
+    SKILL_LAYOUT.forEach(col => {
+        let text = '';
+        col.forEach(s => {
+            const emoji = SKILL_EMOJIS[s] || '';
+            const name = s.charAt(0).toUpperCase() + s.slice(1);
+            text += `${emoji} ${name}\n`;
+        });
+        embed.addFields({ name: '\u200B', value: text, inline: true });
+    });
+
+    if (data.cached) {
+        embed.setFooter({ text: 'Data is cached' });
+    }
+
+    return embed;
+}
+
+/**
+ * @description Creates the action row for stats pagination.
+ */
+function createStatsButtons(identifier, currentPage) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`stats_page:stats:${identifier}`)
+            .setLabel('Stats')
+            .setStyle(currentPage === 'stats' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(currentPage === 'stats'),
+        new ButtonBuilder()
+            .setCustomId(`stats_page:legend:${identifier}`)
+            .setLabel('Legend')
+            .setStyle(currentPage === 'legend' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(currentPage === 'legend')
+    );
+}
+
+/**
+ * @description Renders a wiki page embed (works for general wiki, quests, and bosses).
+ */
+async function renderWikiPageEmbed(result, discordId) {
+    const updated = new Date(result.updatedAt).toLocaleString();
+    const cacheStr = result.cached ? `\n*(cached as of ${updated})*` : '';
+    
+    let extract = result.extract || 'No information available.';
+    if (extract.length > 1500) {
+        extract = extract.substring(0, 1500) + '...';
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle(result.title)
+        .setURL(result.url)
+        .setDescription(extract + cacheStr)
+        .setColor(0x0099FF)
+        .setTimestamp(new Date(result.updatedAt));
+
+    // Handle Quest Details
+    if (result.questDetails) {
+        const qd = result.questDetails;
+        const fields = [];
+        if (qd.start) fields.push({ name: 'Start point', value: qd.start });
+        if (qd.difficulty) fields.push({ name: 'Official difficulty', value: qd.difficulty, inline: true });
+        if (qd.length) fields.push({ name: 'Official length', value: qd.length, inline: true });
+        if (qd.requirements) {
+            let reqs = qd.requirements;
+            if (reqs.length > 1024) reqs = reqs.substring(0, 1021) + '...';
+            fields.push({ name: 'Requirements', value: reqs });
+        }
+        if (qd.items) {
+            let items = qd.items;
+            if (items.length > 1024) items = items.substring(0, 1021) + '...';
+            fields.push({ name: 'Items required', value: items });
+        }
+        if (qd.recommended) {
+            let rec = qd.recommended;
+            if (rec.length > 1024) rec = rec.substring(0, 1021) + '...';
+            fields.push({ name: 'Recommended', value: rec });
+        }
+        if (qd.kills) {
+            let kills = qd.kills;
+            if (kills.length > 1024) kills = kills.substring(0, 1021) + '...';
+            fields.push({ name: 'Enemies to defeat', value: kills });
+        }
+
+        if (fields.length > 0) {
+            embed.addFields(fields);
+        }
+
+        if (qd.description) {
+            embed.setDescription(qd.description + cacheStr);
+        }
+    }
+
+    // Handle Boss Details (Location and Drops)
+    if (result.bossDetails) {
+        const bd = result.bossDetails;
+        if (bd.location) {
+            embed.addFields({ name: 'Location', value: bd.location });
+        }
+        if (bd.drops) {
+            embed.addFields({ name: 'Notable Drops', value: bd.drops });
+        }
+    }
+
+    // Handle Pet Info (Basic rate)
+    if (result.pet && result.pet.chance) {
+        embed.addFields({ 
+            name: 'Pet Info', 
+            value: `**${result.pet.name}**\nDrop Rate: **1/${result.pet.chance.toLocaleString()}**`,
+            inline: true 
+        });
+    }
+
+    // Handle Personal Boss Stats (KC and Probability)
+    if (discordId) {
+        try {
+            let hiscoreKey = result.title
+                .replace(/-/g, ' ')
+                .toLowerCase()
+                .replace(/[^a-z0-9 ]/g, '')
+                .split(' ')
+                .map((word, index) => {
+                    if (word === 'tzkal') return 'tzKal';
+                    if (word === 'tztok') return 'tzTok';
+                    if (word === 'of' && index > 0) return 'of';
+                    if (index === 0) return word;
+                    return word.charAt(0).toUpperCase() + word.slice(1);
+                })
+                .join('');
+            
+            if (hiscoreKey === 'theNightmare') hiscoreKey = 'nightmare';
+            
+            const stats = await getBossStats(discordId, hiscoreKey);
+            if (stats && stats.score !== undefined) {
+                embed.addFields({ name: 'Your Kill Count', value: `**${stats.score.toLocaleString()}**`, inline: true });
+                
+                if (result.pet && result.pet.chance) {
+                    const kc = stats.score;
+                    const chance = 1 / result.pet.chance;
+                    const probability = (1 - Math.pow(1 - chance, kc)) * 100;
+                    const timesDropRate = (kc / result.pet.chance).toFixed(2);
+                    
+                    embed.addFields({ 
+                        name: 'Your Pet Chance', 
+                        value: `**${probability.toFixed(2)}%** (${timesDropRate}x rate)`,
+                        inline: true 
+                    });
+                }
+            }
+        } catch (err) {
+            // Ignore errors for unranked/linked bosses
+            logger.debug(`Could not fetch KC for boss "${result.title}": ${err.message}`);
+        }
+    }
+
+    if (result.image) {
+        embed.setImage(result.image);
+    }
+    
+    if (result.cached) {
+        embed.setFooter({ text: 'Data from cache' });
+    }
+
+    return embed;
+}
+
 /**
  * @description Sets up the interaction handler for slash commands.
  * @param {import('discord.js').Client} client - The Discord client.
  */
 export const setupInteractionHandler = (client) => {
     client.on('interactionCreate', async interaction => {
+        // Restriction: Bob's commands and buttons only in BOBS_CHAT
+        if (BOBS_CHAT && interaction.channelId !== BOBS_CHAT) {
+            const isBobCommand = interaction.isChatInputCommand() && 
+                (interaction.commandName === 'bob-ping' || interaction.commandName === 'os');
+            
+            const isBobButton = interaction.isButton() && (
+                interaction.customId.startsWith('stats_page:') || 
+                interaction.customId.startsWith('wiki_lookup:') || 
+                interaction.customId.startsWith('quest_lookup:') ||
+                interaction.customId.startsWith('boss_lookup:')
+            );
+
+            if (isBobCommand || isBobButton) {
+                await interaction.reply({ 
+                    content: `Please use my commands in <#${BOBS_CHAT}>!`, 
+                    flags: MessageFlags.Ephemeral 
+                });
+
+                try {
+                    const bobsChannel = await client.channels.fetch(BOBS_CHAT);
+                    if (bobsChannel && bobsChannel.isTextBased()) {
+                        await bobsChannel.send(`Hey <@${interaction.user.id}>, try your command here again!`);
+                    }
+                } catch (err) {
+                    logger.error(`Failed to send redirection message to BOBS_CHAT: ${err.message}`);
+                }
+                return;
+            }
+        }
+
+        if (interaction.isButton()) {
+            if (interaction.customId.startsWith('stats_page:')) {
+                try {
+                    const [, page, identifier] = interaction.customId.split(':');
+                    const data = await getStats(identifier);
+                    
+                    if (data) {
+                        const embed = page === 'legend' ? renderLegendEmbed(data) : renderStatsEmbed(data);
+                        const row = createStatsButtons(identifier, page);
+                        await interaction.update({ embeds: [embed], components: [row] });
+                    }
+                } catch (err) {
+                    logger.error(`Error in stats button interaction: ${err.message}`);
+                }
+                return;
+            }
+
+            if (interaction.customId.startsWith('wiki_lookup:') || interaction.customId.startsWith('quest_lookup:') || interaction.customId.startsWith('boss_lookup:')) {
+                try {
+                    await interaction.deferReply();
+                    const title = interaction.customId.split(':').slice(1).join(':');
+                    
+                    let result;
+                    if (interaction.customId.startsWith('boss_lookup:')) {
+                        result = await getBoss(title);
+                    } else {
+                        result = await getWikiPage(title);
+                    }
+                    
+                    if (result?.title) {
+                        const embed = await renderWikiPageEmbed(result, interaction.user.id);
+                        await interaction.editReply({ content: '', embeds: [embed] });
+                    } else {
+                        await interaction.editReply(`Could not find wiki page for "${title}"`);
+                    }
+                } catch (err) {
+                    logger.error(`Error in button interaction: ${err.message}`);
+                    const response = { content: 'Sorry, something went wrong while fetching the page.' };
+                    if (interaction.deferred || interaction.replied) {
+                        await interaction.editReply(response);
+                    } else {
+                        await interaction.reply({ ...response, flags: MessageFlags.Ephemeral });
+                    }
+                }
+                return;
+            }
+            return;
+        }
+
         if (!interaction.isChatInputCommand()) return;
 
         const sub = interaction.options.getSubcommand(false);
@@ -82,6 +378,9 @@ export const setupInteractionHandler = (client) => {
                             .setColor(0x0099FF)
                             .setTimestamp(data.updatedAt ? new Date(data.updatedAt) : new Date());
 
+                        let embeds = [];
+                        let components = [];
+
                         if (skill) {
                             const capitalizedSkill = skill.charAt(0).toUpperCase() + skill.slice(1);
                             const emoji = SKILL_EMOJIS[skill.toLowerCase()] || '';
@@ -93,48 +392,17 @@ export const setupInteractionHandler = (client) => {
                                      { name: 'XP', value: `**${data.xp?.toLocaleString() || 'N/A'}**`, inline: true },
                                      { name: 'Rank', value: `**${data.rank?.toLocaleString() || 'N/A'}**`, inline: true }
                                  );
-                        } else {
-                            const totalLevel = data.totalLevel || data.skills?.overall?.level || 'N/A';
-                            const totalXp = data.totalXP || data.skills?.overall?.xp || 0;
-                            const combatLevel = data.combatLevel || 'N/A';
-
-                            embed.setTitle(`📊 OSRS Stats for ${data.osrsName}`)
-                                 .setURL(`https://services.runescape.com/m=hiscore_oldschool/hiscorepersonal.ws?user1=${encodeURIComponent(data.osrsName)}`)
-                                 .setDescription(`**Combat Level: ${combatLevel}**\n**Total Level: ${totalLevel}**\n**Total XP: ${totalXp.toLocaleString()}**`);
-
-                            const skills = data.skills;
-                            if (skills) {
-                                const skillLayout = [
-                                    ['attack', 'strength', 'defence', 'ranged', 'prayer', 'magic', 'runecraft', 'construction'],
-                                    ['hitpoints', 'agility', 'herblore', 'thieving', 'crafting', 'fletching', 'slayer', 'hunter'],
-                                    ['mining', 'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'farming', 'overall']
-                                ];
-
-                                skillLayout.forEach(col => {
-                                    let text = '';
-                                    col.forEach(s => {
-                                        const val = skills[s];
-                                        const emoji = SKILL_EMOJIS[s] || '';
-                                        const level = val?.level ?? (s === 'overall' ? totalLevel : '1');
-                                        text += `${emoji} **${level}**\n`;
-                                    });
-                                    embed.addFields({ name: '\u200B', value: text, inline: true });
-                                });
-
-                                // Add Legend
-                                const legend = Object.entries(SKILL_EMOJIS)
-                                    .filter(([name]) => name !== 'overall')
-                                    .map(([name, emoji]) => `${emoji} ${name.charAt(0).toUpperCase() + name.slice(1)}`)
-                                    .join(' • ');
-                                embed.addFields({ name: 'Emoji Legend', value: legend });
+                            
+                            if (data.cached) {
+                                embed.setFooter({ text: 'Data is cached' });
                             }
+                            embeds = [embed];
+                        } else {
+                            embeds = [renderStatsEmbed(data)];
+                            components = [createStatsButtons(identifier, 'stats')];
                         }
 
-                        if (data.cached) {
-                            embed.setFooter({ text: 'Data is cached' });
-                        }
-
-                        await interaction.editReply({ content: '', embeds: [embed] });
+                        await interaction.editReply({ content: '', embeds, components });
                     } catch (err) {
                         if (err.response?.status === 404) {
                             await interaction.editReply({ content: `Could not find OSRS stats for "${identifier}". ${!playerName ? "Have you linked your account with `/os link`?" : ""}` });
@@ -157,89 +425,94 @@ export const setupInteractionHandler = (client) => {
                     return;
                 }
 
-                if (sub === 'quest') {
+                if (sub === 'questlookup') {
                     const questName = interaction.options.getString('quest_name', true);
-                    const result = await getQuest(questName);
-                    
-                    if (result?.title) {
-                        const updated = new Date(result.updatedAt).toLocaleString();
-                        const cacheStr = result.cached ? `\n*(cached as of ${updated})*` : '';
+                    try {
+                        const { results } = await searchQuests(questName);
                         
-                        // Limit extract length for Discord (2000 chars limit for whole message)
-                        let extract = result.extract || 'No information available.';
-                        if (extract.length > 500) {
-                            extract = extract.substring(0, 500) + '...';
-                        }
+                        if (results && results.length > 0) {
+                            const topMatches = results.slice(0, 4);
+                            const embed = new EmbedBuilder()
+                                .setTitle(`Quest Search results for "${questName}"`)
+                                .setColor(0x0099FF)
+                                .setDescription(topMatches.map((r, i) => `${i + 1}. **${r.title}**`).join('\n'))
+                                .setFooter({ text: 'Click a button below for quest details' });
+                            
+                            if (topMatches[0].image) {
+                                embed.setThumbnail(topMatches[0].image);
+                            }
 
-                        await interaction.editReply({
-                            content: `### ${result.title}\n${extract}\n\n**Wiki Link:** <${result.url}>${cacheStr}`
-                        });
-                    } else {
-                        await interaction.editReply(`Could not find quest "${questName}"`);
+                            const row = new ActionRowBuilder();
+                            topMatches.forEach((r) => {
+                                const safeTitle = r.title.length > 80 ? r.title.substring(0, 80) : r.title;
+                                row.addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId(`quest_lookup:${safeTitle}`)
+                                        .setLabel(r.title.length > 80 ? r.title.substring(0, 77) + '...' : r.title)
+                                        .setStyle(ButtonStyle.Primary)
+                                );
+                            });
+
+                            await interaction.editReply({
+                                content: '',
+                                embeds: [embed],
+                                components: [row]
+                            });
+                        } else {
+                            await interaction.editReply(`No quests found matching "${questName}"`);
+                        }
+                    } catch (err) {
+                        if (err.response?.status === 404) {
+                            await interaction.editReply(`No quests found matching "${questName}"`);
+                        } else {
+                            throw err;
+                        }
                     }
                     return;
                 }
 
                 if (sub === 'bosslookup') {
                     const bossName = interaction.options.getString('boss_name', true);
-                    const result = await getBoss(bossName);
-                    
-                    if (result?.title) {
-                        const updated = new Date(result.updatedAt).toLocaleString();
-                        const cacheStr = result.cached ? `\n*(cached as of ${updated})*` : '';
+                    try {
+                        const { results } = await searchBosses(bossName);
                         
-                        let extract = result.extract || 'No information available.';
-                        if (extract.length > 500) {
-                            extract = extract.substring(0, 500) + '...';
-                        }
-
-                        // Try to get KC if user is linked
-                        let kcStr = '';
-                        let chanceStr = '';
-                        try {
-                            let hiscoreKey = result.title
-                                .replace(/-/g, ' ')
-                                .toLowerCase()
-                                .replace(/[^a-z0-9 ]/g, '')
-                                .split(' ')
-                                .map((word, index) => {
-                                    if (word === 'tzkal') return 'tzKal';
-                                    if (word === 'tztok') return 'tzTok';
-                                    if (word === 'of' && index > 0) return 'of';
-                                    if (index === 0) return word;
-                                    return word.charAt(0).toUpperCase() + word.slice(1);
-                                })
-                                .join('');
+                        if (results && results.length > 0) {
+                            const topMatches = results.slice(0, 4);
+                            const embed = new EmbedBuilder()
+                                .setTitle(`Boss Search results for "${bossName}"`)
+                                .setColor(0x0099FF)
+                                .setDescription(topMatches.map((r, i) => `${i + 1}. **${r.title}**`).join('\n'))
+                                .setFooter({ text: 'Click a button below for boss details' });
                             
-                            if (hiscoreKey === 'theNightmare') hiscoreKey = 'nightmare';
-                            
-                            const stats = await getBossStats(discordId, hiscoreKey);
-                            if (stats && stats.score !== undefined) {
-                                kcStr = `\n**Your Kill Count:** ${stats.score.toLocaleString()}`;
-                                
-                                // Calculate pet chance if pet info is present
-                                if (result.pet && result.pet.chance) {
-                                    const kc = stats.score;
-                                    const chance = 1 / result.pet.chance;
-                                    const probability = (1 - Math.pow(1 - chance, kc)) * 100;
-                                    const timesDropRate = (kc / result.pet.chance).toFixed(2);
-                                    
-                                    chanceStr = `\n**Pet Chance:** ${probability.toFixed(2)}% (${timesDropRate}x the drop rate)`;
-                                }
+                            if (topMatches[0].image) {
+                                embed.setThumbnail(topMatches[0].image);
                             }
-                        } catch (err) {
-                            if (err.response?.status === 404) {
-                                logger.debug(`Boss "${bossName}" (key: ${hiscoreKey}) is unranked for user ${discordId}`);
-                            } else {
-                                logger.debug(`Could not fetch KC for boss "${bossName}" (key: ${hiscoreKey}): ${err.message}`);
-                            }
-                        }
 
-                        await interaction.editReply({
-                            content: `### ${result.title}\n${extract}\n\n**Wiki Link:** <${result.url}>${kcStr}${chanceStr}${cacheStr}`
-                        });
-                    } else {
-                        await interaction.editReply(`Could not find boss "${bossName}"`);
+                            const row = new ActionRowBuilder();
+                            topMatches.forEach((r) => {
+                                const safeTitle = r.title.length > 80 ? r.title.substring(0, 80) : r.title;
+                                row.addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId(`boss_lookup:${safeTitle}`)
+                                        .setLabel(r.title.length > 80 ? r.title.substring(0, 77) + '...' : r.title)
+                                        .setStyle(ButtonStyle.Primary)
+                                );
+                            });
+
+                            await interaction.editReply({
+                                content: '',
+                                embeds: [embed],
+                                components: [row]
+                            });
+                        } else {
+                            await interaction.editReply(`No bosses found matching "${bossName}"`);
+                        }
+                    } catch (err) {
+                        if (err.response?.status === 404) {
+                            await interaction.editReply(`No bosses found matching "${bossName}"`);
+                        } else {
+                            throw err;
+                        }
                     }
                     return;
                 }
@@ -256,6 +529,52 @@ export const setupInteractionHandler = (client) => {
                     } catch (err) {
                         if (err.response?.status === 404) {
                             await interaction.editReply(`Could not find pet information for "${bossName}".`);
+                        } else {
+                            throw err;
+                        }
+                    }
+                    return;
+                }
+
+                if (sub === 'wikilookup') {
+                    const query = interaction.options.getString('query', true);
+                    try {
+                        const { results } = await searchWiki(query);
+                        
+                        if (results && results.length > 0) {
+                            const topMatches = results.slice(0, 4);
+                            const embed = new EmbedBuilder()
+                                .setTitle(`Wiki Search results for "${query}"`)
+                                .setColor(0x0099FF)
+                                .setDescription(topMatches.map((r, i) => `${i + 1}. **${r.title}**`).join('\n'))
+                                .setFooter({ text: 'Click a button below for more details' });
+                            
+                            if (topMatches[0].image) {
+                                embed.setThumbnail(topMatches[0].image);
+                            }
+
+                            const row = new ActionRowBuilder();
+                            topMatches.forEach((r) => {
+                                const safeTitle = r.title.length > 80 ? r.title.substring(0, 80) : r.title;
+                                row.addComponents(
+                                    new ButtonBuilder()
+                                        .setCustomId(`wiki_lookup:${safeTitle}`)
+                                        .setLabel(r.title.length > 80 ? r.title.substring(0, 77) + '...' : r.title)
+                                        .setStyle(ButtonStyle.Primary)
+                                );
+                            });
+
+                            await interaction.editReply({
+                                content: '',
+                                embeds: [embed],
+                                components: [row]
+                            });
+                        } else {
+                            await interaction.editReply(`No wiki results found for "${query}"`);
+                        }
+                    } catch (err) {
+                        if (err.response?.status === 404) {
+                            await interaction.editReply(`No wiki results found for "${query}"`);
                         } else {
                             throw err;
                         }
@@ -289,13 +608,132 @@ export const setupInteractionHandler = (client) => {
 
 /**
  * @description Sets up the message listener for handling message-based events.
+ * Listens for "bob", @bob, or replies in the configured chat channel to trigger n8n.
  * @param {import('discord.js').Client} client - The Discord client.
  */
 export const setupMessageListener = (client) => {
-    client.on('messageCreate', message => {
+    client.on('messageCreate', async message => {
+        // Ignore bot messages
         if (message.author.bot) return;
+
+        // Only listen in BOBS_CHAT if configured
+        if (BOBS_CHAT && message.channelId === BOBS_CHAT) {
+            const content = message.content.toLowerCase();
+            const isMentioned = message.mentions.has(client.user);
+            const containsBob = content.includes('bob');
+            const isReplyToBob = message.mentions.repliedUser?.id === client.user.id;
+
+            // Trigger criteria: contains "bob", mentions bot, or is a reply to Bob
+            if (containsBob || isMentioned || isReplyToBob) {
+                logger.info(`N8N Triggered by ${message.author.tag}: ${message.content}`);
+                
+                // Show typing indicator
+                try {
+                    await message.channel.sendTyping();
+                } catch (err) {
+                    logger.error(`Error sending typing indicator: ${err.message}`);
+                }
+
+                // Send initial "thinking" message
+                let statusMessage;
+                try {
+                    statusMessage = await message.reply("⏳ **Bob is thinking...**");
+                } catch (err) {
+                    logger.error(`Error sending status message: ${err.message}`);
+                }
+
+                // Prepare payload for n8n
+                const payload = {
+                    prompt: message.content,
+                    user: message.author.username,
+                    userId: message.author.id,
+                    channelId: message.channelId,
+                    messageId: message.id,
+                    statusMessageId: statusMessage?.id,
+                    timestamp: message.createdAt
+                };
+
+                // Send to n8n
+                const response = await askN8N(payload);
+
+                // If askN8N returns null, it means the request itself failed
+                if (!response) {
+                    const errorMsg = "❌ **Bob is currently busy or having trouble thinking. Please try again in a bit.**";
+                    if (statusMessage) {
+                        try {
+                            await statusMessage.edit(errorMsg);
+                        } catch (err) {
+                            logger.error(`Error editing status message with error: ${err.message}`);
+                        }
+                    } else {
+                        try {
+                            await message.reply(errorMsg);
+                        } catch (err) {
+                            logger.error(`Error sending error reply: ${err.message}`);
+                        }
+                    }
+                    logger.warn('No response received from n8n or an error occurred.');
+                }
+                // Note: The actual AI response will be handled via the REST API callback
+            }
+        }
         
-        // Basic message handling could go here
-        logger.info(`Received message: ${message.content}`);
+        logger.debug(`Received message: ${message.content} from ${message.author.tag}`);
     });
 };
+
+/**
+ * @description Handles the AI response callback from n8n.
+ * @param {import('discord.js').Client} client - The Discord client.
+ * @param {object} data - The response data from n8n.
+ */
+export async function handleAiResponse(client, data) {
+    const { response, channelId, statusMessageId, error } = data;
+    
+    logger.debug(`Handling AI response callback: ${JSON.stringify(data)}`);
+
+    try {
+        const channel = await client.channels.fetch(channelId);
+        if (!channel || !channel.isTextBased()) {
+            logger.error(`Could not find channel ${channelId} for AI response.`);
+            return;
+        }
+
+        let statusMessage;
+        if (statusMessageId) {
+            try {
+                statusMessage = await channel.messages.fetch(statusMessageId);
+            } catch (err) {
+                logger.debug(`Could not find status message ${statusMessageId}: ${err.message}`);
+            }
+        }
+
+        if (error) {
+            const errorMsg = `❌ **Error from AI:** ${error}`;
+            if (statusMessage) {
+                await statusMessage.edit(errorMsg);
+            } else {
+                await channel.send(errorMsg);
+            }
+            return;
+        }
+
+        if (response) {
+            const reply = response.length > 2000 ? response.substring(0, 1997) + '...' : response;
+            if (statusMessage) {
+                await statusMessage.edit(reply);
+            } else {
+                await channel.send(reply);
+            }
+        } else {
+            const warnMsg = "⚠️ **Bob had a blank thought. Please try again.**";
+            if (statusMessage) {
+                await statusMessage.edit(warnMsg);
+            } else {
+                await channel.send(warnMsg);
+            }
+        }
+    } catch (err) {
+        logger.error(`Error in handleAiResponse: ${err.message}`);
+    }
+}

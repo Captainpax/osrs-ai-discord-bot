@@ -1,5 +1,6 @@
 import { MessageFlags } from 'discord.js';
 import logger from '../utility/logger.mjs';
+import { pushLeaderboard } from '../utility/bobApi.mjs';
 
 /**
  * @description Sets up the interaction handler for slash commands.
@@ -17,6 +18,22 @@ export const setupInteractionHandler = (client) => {
             if (interaction.commandName === 'king-ping') {
                 await interaction.reply('King Roald says Pong!');
                 return;
+            }
+
+            if (interaction.commandName === 'admin') {
+                const sub = interaction.options.getSubcommand();
+                
+                if (sub === 'pushleaderboard') {
+                    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+                    try {
+                        const result = await pushLeaderboard();
+                        await interaction.editReply({ content: `✅ ${result.message}` });
+                    } catch (err) {
+                        logger.error(`Error pushing leaderboard: ${err.message}`);
+                        await interaction.editReply({ content: '❌ Failed to push leaderboard. Is Bob awake?' });
+                    }
+                    return;
+                }
             }
         } catch (err) {
             logger.error(`Command error: ${err.message}`);

@@ -48,9 +48,19 @@ export async function getQuest(name) {
   return data; // { title, extract, url, image, updatedAt, cached }
 }
 
+export async function searchQuests(query) {
+  const { data } = await api.get(`/osrs/quest/search/${encodeURIComponent(query)}`);
+  return data; // { results, cached, updatedAt }
+}
+
 export async function getBoss(name) {
   const { data } = await api.get(`/osrs/boss/${encodeURIComponent(name)}`);
   return data; // { title, extract, url, image, updatedAt, cached }
+}
+
+export async function searchBosses(query) {
+  const { data } = await api.get(`/osrs/boss/search/${encodeURIComponent(query)}`);
+  return data; // { results, cached, updatedAt }
 }
 
 export async function getBossStats(identifier, boss) {
@@ -63,6 +73,26 @@ export async function getBossPet(name) {
   return data; // { boss, pet: { name, id, chance } }
 }
 
+export async function searchWiki(query) {
+  const { data } = await api.get(`/osrs/wiki/${encodeURIComponent(query)}`);
+  return data; // { results, cached, updatedAt }
+}
+
+export async function getWikiPage(title) {
+  const { data } = await api.get(`/osrs/wiki/page/${encodeURIComponent(title)}`);
+  return data; // { title, extract, url, image, updatedAt, cached }
+}
+
+export async function getLeaderboard() {
+  const { data } = await api.get('/osrs/leaderboard');
+  return data; // { leaderboard: Array<{ discordId, osrsName, totalLevel, totalXP, weeklyGains }>, highestGainer: { osrsName, gains, discordId } }
+}
+
+export async function checkLevelUps() {
+  const { data } = await api.get('/osrs/check-level-ups');
+  return data; // Array<{ discordId, osrsName, diffs: Array<{ skill, oldLevel, newLevel }> }>
+}
+
 export default {
   ensureProfileAndToken,
   linkOsrsName,
@@ -70,7 +100,13 @@ export default {
   getStats,
   priceLookup,
   getQuest,
+  searchQuests,
   getBoss,
+  searchBosses,
   getBossStats,
-  getBossPet
+  getBossPet,
+  searchWiki,
+  getWikiPage,
+  getLeaderboard,
+  checkLevelUps
 };

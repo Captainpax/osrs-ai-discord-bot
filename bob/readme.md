@@ -48,6 +48,14 @@ docker run --env-file ./.env --name bob osrs-bob
 
 - `/bob-ping` — Replies with "Bob says Pong!"
 
+## Testing
+
+New testing scripts have been added to `package.json` to help verify n8n and AI integration:
+
+- `npm run test:n8n-setup` — Verifies connectivity to n8n and checks for the Bob workflow.
+- `npm run test:n8n-webhook` — Sends a test prompt to the n8n webhook.
+- `npm run test:ai-callback` — Simulates an AI response from n8n to Bob's API.
+
 ## Notes
 
 - Commands are registered per-guild if `DISCORD_GUILD_ID` is set; otherwise they are registered globally (may take time to propagate).

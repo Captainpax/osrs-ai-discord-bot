@@ -10,6 +10,13 @@ export const commands = [
     new SlashCommandBuilder()
         .setName('king-ping')
         .setDescription('Replies with King Roald\'s Pong!'),
+    new SlashCommandBuilder()
+        .setName('admin')
+        .setDescription('Admin commands')
+        .addSubcommand(sub =>
+            sub.setName('pushleaderboard')
+               .setDescription('Tells Bob to push the leaderboard now')
+        ),
 ].map(command => command.toJSON());
 
 /**

@@ -67,7 +67,7 @@ export const commands = [
                .addStringOption(opt => opt.setName('item').setDescription('Item name').setRequired(true))
         )
         .addSubcommand(sub =>
-            sub.setName('quest')
+            sub.setName('questlookup')
                .setDescription('Look up OSRS quest info and wiki link')
                .addStringOption(opt => opt.setName('quest_name').setDescription('Name of the quest').setRequired(true))
         )
@@ -80,6 +80,11 @@ export const commands = [
             sub.setName('bosspetget')
                .setDescription('Check pet drop rate for a boss')
                .addStringOption(opt => opt.setName('boss_name').setDescription('Name of the boss').setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName('wikilookup')
+               .setDescription('Search the OSRS Wiki')
+               .addStringOption(opt => opt.setName('query').setDescription('Search term').setRequired(true))
         )
 ].map(command => command.toJSON());
 

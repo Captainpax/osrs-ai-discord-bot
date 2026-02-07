@@ -10,7 +10,9 @@ app.use(express.json());
 
 // Middleware to log requests
 app.use((req, res, next) => {
-    logger.debug(`${req.method} ${req.url}`);
+    if (req.url !== '/health' && req.url !== '/healthz') {
+        logger.debug(`${req.method} ${req.url}`);
+    }
     next();
 });
 
@@ -25,7 +27,6 @@ app.use('/settings', settingsRoutes);
  * @returns {object} 200 - Success message and timestamp.
  */
 app.get('/health', (req, res) => {
-    logger.info('Health check requested');
     res.status(200).json({
         status: 'UP',
         timestamp: new Date().toISOString(),

@@ -23,6 +23,8 @@ export const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 export const AI_BASE_URL = process.env.AI_BASE_URL;
 export const AI_MODEL = process.env.AI_MODEL || "gpt-4o-mini";
 export const OLD_WISE_MAN_URL = process.env.OLD_WISE_MAN_URL || 'http://localhost:8888';
+export const BOB_URL = process.env.BOB_URL || 'http://bob:8889';
+export const N8N_API_KEY = process.env.N8N_API_KEY;
 
 export default {
     PORT,
@@ -34,5 +36,7 @@ export default {
     OPENAI_API_KEY,
     AI_BASE_URL,
     AI_MODEL,
-    OLD_WISE_MAN_URL
+    OLD_WISE_MAN_URL,
+    BOB_URL,
+    N8N_API_KEY
 };
