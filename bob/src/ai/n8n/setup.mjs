@@ -131,16 +131,8 @@ export async function ensureWorkflowExists() {
             logger.info('Successfully updated n8n workflow.');
             
             logger.info('Activating "Bob Chat Workflow"...');
-            try {
-                await axios.post(`${apiUrl}/workflows/${existing.id}/activate`, {}, { headers });
-                logger.info('Successfully activated workflow.');
-            } catch (actErr) {
-                if (actErr.response?.data?.message?.includes('conflict')) {
-                    logger.error('CRITICAL: Webhook conflict detected during activation. Another workflow may be using the "bob-prompt" path. Please check n8n and deactivate any conflicting workflows.');
-                } else {
-                    throw actErr;
-                }
-            }
+            await axios.post(`${apiUrl}/workflows/${existing.id}/activate`, {}, { headers });
+            logger.info('Successfully activated workflow.');
             return;
         }
 
@@ -152,19 +144,13 @@ export async function ensureWorkflowExists() {
 
         // 3. Activate the new workflow
         logger.info('Activating "Bob Chat Workflow"...');
-        try {
-            await axios.post(`${apiUrl}/workflows/${newWorkflow.id}/activate`, {}, { headers });
-            logger.info('Successfully activated workflow.');
-        } catch (actErr) {
-            if (actErr.response?.data?.message?.includes('conflict')) {
-                logger.error('CRITICAL: Webhook conflict detected during activation of NEW workflow. Another workflow may be using the "bob-prompt" path. Please check n8n.');
-            } else {
-                throw actErr;
-            }
-        }
+        await axios.post(`${apiUrl}/workflows/${newWorkflow.id}/activate`, {}, { headers });
+        logger.info('Successfully activated workflow.');
 
     } catch (error) {
-        if (error.code === 'ECONNREFUSED') {
+        if (error.response?.data?.message?.includes('conflict')) {
+            logger.error('CRITICAL: Webhook conflict detected during activation. Another workflow may be using the "bob-prompt" path. Please check n8n and deactivate any conflicting workflows.');
+        } else if (error.code === 'ECONNREFUSED') {
             logger.error(`Could not connect to n8n API at ${apiUrl}. Is n8n running?`);
         } else {
             logger.error(`Error during n8n setup: ${error.message}`);
@@ -183,7 +169,7 @@ export async function ensureWorkflowExists() {
  */
 function prefillWorkflow(content) {
     // Regex matches {{ $env.VAR_NAME || 'DEFAULT' }} or {{ $env.VAR_NAME }}
-    return content.replace(/\{\{\s*\$env\.([A-Z0-9_]+)\s*(?:\|\|\s*'([^']*)')?\s*\}\}/g, (match, varName, defaultValue) => {
+    return content.replace(/\{\{\s*\$env\.([A-Z0-9_]+)\s*(?:\|\|\s*'([^']*)')?\s*}}/g, (match, varName, defaultValue) => {
         const value = process.env[varName] || defaultValue || '';
         logger.debug(`Prefilling workflow var ${varName} with "${value}"`);
         return value;

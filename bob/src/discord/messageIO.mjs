@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import logger from '../utility/logger.mjs';
 import { BOBS_CHAT, BOBS_THOUGHTS } from '../utility/loadedVariables.mjs';
-import { ensureProfileAndToken, linkOsrsName, unlinkOsrsName, getStats, priceLookup, getQuest, searchQuests, getBoss, searchBosses, getBossStats, getBossPet, searchWiki, getWikiPage } from '../utility/wiseApi.mjs';
+import { ensureProfileAndToken, linkOsrsName, unlinkOsrsName, getStats, priceLookup, searchQuests, getBoss, searchBosses, getBossStats, getBossPet, searchWiki, getWikiPage } from '../utility/wiseApi.mjs';
 import { askN8N } from '../ai/n8n/index.mjs';
 
 const SKILL_EMOJIS = {
@@ -382,6 +382,27 @@ export const setupInteractionHandler = (client) => {
 
         if (!interaction.isChatInputCommand()) return;
 
+        /**
+         * @description Helper to handle command errors consistently.
+         */
+        const handleCommandError = async (cmdInteraction, err, custom404Msg) => {
+            const status = err.response?.status;
+            const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message;
+            logger.error(`Command error: ${errorMsg}`);
+
+            if (status === 404 && custom404Msg) {
+                await cmdInteraction.editReply({ content: custom404Msg });
+            } else {
+                let responseContent = `Sorry, something went wrong: ${errorMsg}`;
+                if (status === 429) {
+                    responseContent = `❌ **Rate limited by OSRS API**\nPlease wait a moment before trying again. <t:${Math.floor(Date.now() / 1000)}:R>`;
+                }
+                try {
+                    await cmdInteraction.editReply({ content: responseContent });
+                } catch (_) { /* ignore */ }
+            }
+        };
+
         const sub = interaction.options.getSubcommand(false);
         const commandStr = sub ? `${interaction.commandName} ${sub}` : interaction.commandName;
         logger.debug(`Command "/${commandStr}" run by ${interaction.user.tag} (${interaction.user.id})`);
@@ -427,7 +448,7 @@ export const setupInteractionHandler = (client) => {
                             .setColor(0x0099FF)
                             .setTimestamp(data.updatedAt ? new Date(data.updatedAt) : new Date());
 
-                        let embeds = [];
+                        let embeds;
                         let components = [];
 
                         if (skill) {
@@ -453,13 +474,9 @@ export const setupInteractionHandler = (client) => {
 
                         await interaction.editReply({ content: '', embeds, components });
                     } catch (err) {
-                        if (err.response?.status === 404) {
-                            await interaction.editReply({ content: `Could not find OSRS stats for "${identifier}". ${!playerName ? "Have you linked your account with `/os link`?" : ""}` });
-                        } else {
-                            throw err;
-                        }
+                        await handleCommandError(interaction, err, `Could not find OSRS stats for "${identifier}". ${!playerName ? "Have you linked your account with \`/os link\`?" : ""}`);
+                        return;
                     }
-                    return;
                 }
 
                 if (sub === 'pricelookup') {
@@ -511,13 +528,9 @@ export const setupInteractionHandler = (client) => {
                             await interaction.editReply(`No quests found matching "${questName}"`);
                         }
                     } catch (err) {
-                        if (err.response?.status === 404) {
-                            await interaction.editReply(`No quests found matching "${questName}"`);
-                        } else {
-                            throw err;
-                        }
+                        await handleCommandError(interaction, err, `No quests found matching "${questName}"`);
+                        return;
                     }
-                    return;
                 }
 
                 if (sub === 'bosslookup') {
@@ -557,13 +570,9 @@ export const setupInteractionHandler = (client) => {
                             await interaction.editReply(`No bosses found matching "${bossName}"`);
                         }
                     } catch (err) {
-                        if (err.response?.status === 404) {
-                            await interaction.editReply(`No bosses found matching "${bossName}"`);
-                        } else {
-                            throw err;
-                        }
+                        await handleCommandError(interaction, err, `No bosses found matching "${bossName}"`);
+                        return;
                     }
-                    return;
                 }
 
                 if (sub === 'bosspetget') {
@@ -576,13 +585,9 @@ export const setupInteractionHandler = (client) => {
                             content: `### ${boss} Pet Info\n**Pet:** ${pet.name}\n**Drop Rate:** 1/${pet.chance.toLocaleString()}\n\n*Use \`/os bosslookup\` to see your personal chance!*`
                         });
                     } catch (err) {
-                        if (err.response?.status === 404) {
-                            await interaction.editReply(`Could not find pet information for "${bossName}".`);
-                        } else {
-                            throw err;
-                        }
+                        await handleCommandError(interaction, err, `Could not find pet information for "${bossName}".`);
+                        return;
                     }
-                    return;
                 }
 
                 if (sub === 'wikilookup') {
@@ -622,35 +627,12 @@ export const setupInteractionHandler = (client) => {
                             await interaction.editReply(`No wiki results found for "${query}"`);
                         }
                     } catch (err) {
-                        if (err.response?.status === 404) {
-                            await interaction.editReply(`No wiki results found for "${query}"`);
-                        } else {
-                            throw err;
-                        }
+                        await handleCommandError(interaction, err, `No wiki results found for "${query}"`);
                     }
-                    return;
                 }
             }
         } catch (err) {
-            const status = err.response?.status;
-            const errorMsg = err.response?.data?.error || err.response?.data?.details || err.message;
-            
-            logger.error(`Command error: ${errorMsg}`);
-            if (err.response?.data) {
-                logger.debug(`Error response body: ${JSON.stringify(err.response.data)}`);
-            }
-            logger.debug(err.stack);
-
-            let responseContent = `Sorry, something went wrong: ${errorMsg}`;
-            if (status === 429) {
-                responseContent = `❌ **Rate limited by OSRS API**\nPlease wait a moment before trying again. <t:${Math.floor(Date.now() / 1000)}:R>`;
-            }
-
-            try {
-                await interaction.editReply({ content: responseContent });
-            } catch (_) {
-                // ignore
-            }
+            await handleCommandError(interaction, err);
         }
     });
 };

@@ -205,7 +205,6 @@ export const setupInteractionHandler = (client) => {
                         logger.error(`Error fetching health: ${err.message}`);
                         await interaction.editReply({ content: '❌ Failed to fetch health status.' });
                     }
-                    return;
                 }
             }
         } catch (err) {
