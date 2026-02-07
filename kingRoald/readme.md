@@ -1,42 +1,35 @@
-# King Roald Service
+# King Roald
 
-King Roald is a secondary service and Discord bot in the OSRS AI project.
+King Roald is the admin bot. It provides operational commands and health visibility.
 
 ## Requirements
 
-- Node.js 22 or higher
-- npm (bundled with Node.js)
-- A Discord application and bot token from the Discord Developer Portal
+- Node.js 22+
+- Discord bot token + app ID
 
 ## Environment Variables
 
-This service uses the centralized `.env` file in the project root.
-- `KING_ROALD_DISCORD_TOKEN` — Your bot token
-- `KING_ROALD_DISCORD_CLIENT_ID` — Your application (client) ID
-- `KING_ROALD_DISCORD_GUILD_ID` — Optional: a test guild ID for instant slash-command updates during development
-- `DEBUG` — Optional: set to `true` for verbose logs
-- `KING_ROALD_PORT` — The port for the API (default 8890)
-- `MONGODB_URI` — Connection string for MongoDB
-- `OPENAI_API_KEY` — Required for LangChain OpenAI models
+Uses the root `.env` file.
 
-## Local Setup (Node 22)
+Required:
+- `KING_ROALD_DISCORD_TOKEN`
+- `KING_ROALD_DISCORD_CLIENT_ID`
 
-1. Install dependencies:
-   ```bash
-   npm install
-   ```
-2. Start the service:
-   ```bash
-   npm start
-   ```
+Recommended:
+- `KING_ROALD_DISCORD_GUILD_ID` (dev-only command registration)
+- `KING_ROALD_PORT` (default `8890`)
+- `BOB_URL`, `OLD_WISE_MAN_URL`
 
-## Run with Docker
+## Local Run
 
-A Dockerfile is provided. From the project root:
 ```bash
-docker-compose up --build
+npm install
+npm start
 ```
 
 ## Commands
 
-- `/king-ping` — Replies with "King Roald says Pong!"
+- `/king-ping`
+- `/admin pushleaderboard`
+- `/admin health` (paged health summary + per-service details)
+

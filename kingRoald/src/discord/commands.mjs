@@ -16,6 +16,10 @@ export const commands = [
         .addSubcommand(sub =>
             sub.setName('pushleaderboard')
                .setDescription('Tells Bob to push the leaderboard now')
+        )
+        .addSubcommand(sub =>
+            sub.setName('health')
+               .setDescription('Displays cluster health status')
         ),
 ].map(command => command.toJSON());
 

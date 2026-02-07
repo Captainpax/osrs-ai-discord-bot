@@ -18,6 +18,8 @@ services:
         condition: service_healthy
       n8n:
         condition: service_healthy
+      local-ai:
+        condition: service_healthy
 
   # Old Wise Man - API
   old-wise-man:
@@ -33,12 +35,15 @@ services:
       - ./.env
     networks:
       - osrs-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://localhost:8888/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
 
   # King Roald
   king-roald:
@@ -59,9 +64,8 @@ services:
         condition: service_healthy
       n8n:
         condition: service_healthy
-    # Add dependency on mongodb if we decide to run it locally
-    # depends_on:
-    #   - mongodb
+      local-ai:
+        condition: service_healthy
 
   # n8n - Workflow Automation
   n8n:
@@ -82,30 +86,94 @@ services:
       - osrs-network
     volumes:
       - n8n_data:/home/node/.n8n
+    depends_on:
+      local-ai:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:5678/healthz').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))\""]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+
+  # LocalAI - Self-hosted AI
+  local-ai:
+    image: localai/localai:master-aio-gpu-nvidia-cuda-12
+    container_name: local-ai
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - DEBUG=true
+      - MODELS_PATH=/models
+      - THREADS=4
+    volumes:
+      - localai_data:/models
+      - localai_backends:/backends
+      - localai_config:/configuration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - osrs-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/readyz"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 10m
+
+  # MongoDB - Database
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    networks:
+      - osrs-network
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+
+  # Redis - Cache & AI Memory
+  redis:
+    image: redis:latest
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - osrs-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 30s
-
-  # Optional: MongoDB service for local development
-  # mongodb:
-  #   image: mongo:latest
-  #   container_name: mongodb
-  #   restart: always
-  #   ports:
-  #     - "27017:27017"
-  #   networks:
-  #     - osrs-network
-  #   volumes:
-  #     - mongodb_data:/data/db
+      retries: 5
 
 networks:
   osrs-network:
     driver: bridge
 
-# volumes:
-#   mongodb_data:
 volumes:
   n8n_data:
+  mongodb_data:
+  mongodb_config:
+  localai_data:
+  localai_backends:
+  localai_config:
+  redis_data:

@@ -44,10 +44,10 @@ async function main() {
         });
 
         // Add AI callback route
-        app.post('/ai/callback', async (req, res) => {
+        app.post('/ai/callback/:sessionId', async (req, res) => {
             try {
                 logger.debug(`AI Callback received: ${JSON.stringify(req.body)}`);
-                await handleAiResponse(client, req.body);
+                await handleAiResponse(client, req.params.sessionId, req.body);
                 res.status(200).json({ status: 'received' });
             } catch (err) {
                 logger.error(`Error in AI callback: ${err.message}`);

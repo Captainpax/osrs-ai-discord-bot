@@ -1,54 +1,74 @@
-# OSRS AI Discord Bot Project
+# OSRS AI Discord Bot
 
-This monorepo contains multiple services that together power an OSRS AI experience on Discord.
+Monorepo for a multi-service Old School RuneScape Discord experience. The stack includes two Discord bots, an OSRS API, an n8n workflow, and supporting services (MongoDB, Redis, LocalAI).
 
-## Project Structure
+## Services
 
-- `bob/` — Discord bot client (slash commands, interactions)
-- `oldWiseMan/` — API and backend service (HTTP, DB, business logic)
-- `kingRoald/` — Secondary Discord bot and service
+- `bob/` - Discord bot that handles chat, slash commands, and n8n AI responses.
+- `oldWiseMan/` - OSRS API + MongoDB-backed cache and profiles.
+- `kingRoald/` - Admin Discord bot (health + orchestration commands).
+- `n8n/` - Workflow definitions (AI agent, tools, callbacks).
 
-## Requirements
+## Quick Start (Docker)
 
-- Docker + Docker Compose (recommended way to run everything)
-- OR Node.js 22+ for local development (services enforce this via `engines`)
-- Centralized `.env` file in the project root (use `.env.example` template)
-
-## Quick Start (Docker Compose)
-
-From the repository root:
 ```bash
 docker-compose up --build
 ```
-This will build images (using Node 22 base images) and start:
-- `bob` (Discord bot on port 8889)
-- `old-wise-man` (API on port 8888)
-- `king-roald` (Discord bot on port 8890)
 
-To stop and remove containers:
+Ports:
+- Bob: `8889`
+- Old Wise Man: `8888`
+- King Roald: `8890`
+- n8n: `5678`
+- LocalAI: `8080`
+
+Stop:
 ```bash
 docker-compose down
 ```
 
 ## Local Development (Node 22)
 
-- Bob (Discord bot): see `bob/readme.md` for detailed steps. In short:
-  ```bash
-  cd bob
-  cp .env.example .env  # then fill in values
-  npm install
-  npm start
-  ```
+Each service is standalone. From the root:
 
-- Old Wise Man (API): similar process inside `oldWiseMan/` (ensure `.env` is set, port defaults to 8888).
+```bash
+cp .env.example .env
+# fill in tokens and URLs
+```
 
-## Notes
+Then in each service:
+```bash
+cd bob
+npm install
+npm start
+```
 
-- All Dockerfiles use `node:22-slim`.
-- `package.json` in each service (where applicable) sets `engines.node` to `>=22`.
-- For development convenience, Bob supports per-guild command registration via `DISCORD_GUILD_ID` for instant updates.
+## Environment Variables
 
-## Documentation
+All services load from the root `.env`. Start with `.env.example`.
 
-- `bob/readme.md` — detailed bot setup and usage
-- `oldWiseMan/` — API internals and utility modules (logger, env loading)
+Key entries:
+- `BOB_DISCORD_TOKEN`, `BOB_DISCORD_CLIENT_ID`, `BOB_DISCORD_GUILD_ID`
+- `BOBS_CHAT` - channel where Bob listens for messages
+- `BOBS_THOUGHTS` - channel for n8n + AI debug logs
+- `OLD_WISE_MAN_URL`, `OLD_WISE_MAN_PORT`
+- `KING_ROALD_DISCORD_TOKEN`, `KING_ROALD_DISCORD_CLIENT_ID`
+- `AI_BASE_URL`, `AI_MODEL`
+- `N8N_WEBHOOK_URL`, `N8N_API_KEY`
+
+## Health
+
+Each service exposes `GET /health` with system metrics, service checks, and PST timestamps.
+
+## n8n Workflow
+
+See `n8n/README.md` for import steps. The workflow uses:
+- `/webhook/bob-prompt`
+- callbacks to `BOB_URL/ai/callback/:sessionId`
+
+## Troubleshooting
+
+- 404 from n8n: import + activate the workflow and confirm `N8N_WEBHOOK_URL`.
+- No AI response: check `BOBS_THOUGHTS` for webhook + callback logs.
+- Slow AI: verify `AI_BASE_URL` and LocalAI health at `/readyz`.
+

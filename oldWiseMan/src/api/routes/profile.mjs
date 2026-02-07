@@ -180,17 +180,27 @@ router.post('/link', authenticateToken, async (req, res) => {
 
 /**
  * @route POST /profile/levels
- * @description Fetches OSRS levels for a linked profile.
- * @body { "uuid": "12345" }
+ * @description Fetches OSRS levels for a linked profile. Supports lookup by identifier (uuid, discordId, username, or osrsName).
+ * @body { "identifier": "12345" }
  */
 router.post('/levels', async (req, res) => {
     try {
-        const { uuid } = req.body;
-        if (!uuid) {
-            return res.status(400).json({ error: 'uuid is required' });
+        const { uuid, identifier, discordId } = req.body;
+        const target = identifier || uuid || discordId;
+        
+        if (!target) {
+            return res.status(400).json({ error: 'identifier, uuid, or discordId is required' });
         }
 
-        const profile = await Profile.findOne({ uuid });
+        const profile = await Profile.findOne({
+            $or: [
+                { uuid: target },
+                { discordId: target },
+                { username: target },
+                { osrsName: target }
+            ]
+        });
+
         if (!profile) {
             return res.status(404).json({ error: 'Profile not found' });
         }
@@ -199,7 +209,7 @@ router.post('/levels', async (req, res) => {
             return res.status(400).json({ error: 'No OSRS account linked to this profile' });
         }
 
-        logger.debug(`Fetching OSRS levels for ${profile.osrsName} (${uuid})`);
+        logger.debug(`Fetching OSRS levels for ${profile.osrsName} (${profile.uuid})`);
         const { data: stats, cached, updatedAt } = await getCachedHiscores(profile.osrsName);
 
         if (!stats) {
@@ -220,7 +230,8 @@ router.post('/levels', async (req, res) => {
             updatedAt
         });
     } catch (error) {
-        logger.error(`Error fetching levels for profile ${req.body.uuid}: ${error.message}`);
+        const target = req.body.identifier || req.body.uuid || req.body.discordId || 'unknown';
+        logger.error(`Error fetching levels for profile ${target}: ${error.message}`);
         res.status(500).json({ error: 'Internal Server Error' });
     }
 });

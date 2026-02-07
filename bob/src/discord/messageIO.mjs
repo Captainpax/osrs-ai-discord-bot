@@ -1,6 +1,7 @@
+import crypto from 'crypto';
 import { MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import logger from '../utility/logger.mjs';
-import { BOBS_CHAT } from '../utility/loadedVariables.mjs';
+import { BOBS_CHAT, BOBS_THOUGHTS } from '../utility/loadedVariables.mjs';
 import { ensureProfileAndToken, linkOsrsName, unlinkOsrsName, getStats, priceLookup, getQuest, searchQuests, getBoss, searchBosses, getBossStats, getBossPet, searchWiki, getWikiPage } from '../utility/wiseApi.mjs';
 import { askN8N } from '../ai/n8n/index.mjs';
 
@@ -36,6 +37,54 @@ const SKILL_LAYOUT = [
     ['hitpoints', 'agility', 'herblore', 'thieving', 'crafting', 'fletching', 'slayer', 'hunter'],
     ['mining', 'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'farming', 'overall']
 ];
+
+const SESSION_TTL_MS = 15 * 60 * 1000;
+const SESSION_CLEANUP_MS = 5 * 60 * 1000;
+const n8nSessions = new Map();
+
+const registerSession = (sessionId, data) => {
+    n8nSessions.set(sessionId, { ...data, createdAt: Date.now() });
+};
+
+const getSession = (sessionId) => n8nSessions.get(sessionId);
+
+const clearSession = (sessionId) => {
+    n8nSessions.delete(sessionId);
+};
+
+const cleanupSessions = () => {
+    const now = Date.now();
+    for (const [sessionId, data] of n8nSessions.entries()) {
+        if (now - data.createdAt > SESSION_TTL_MS) {
+            n8nSessions.delete(sessionId);
+        }
+    }
+};
+
+const cleanupInterval = setInterval(cleanupSessions, SESSION_CLEANUP_MS);
+if (cleanupInterval.unref) cleanupInterval.unref();
+
+const truncate = (text, max = 900) => {
+    if (!text) return '';
+    return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+};
+
+const buildThoughtEmbed = (title, fields = [], color = 0x5865F2) => {
+    const embed = new EmbedBuilder().setTitle(title).setColor(color).setTimestamp(new Date());
+    if (fields.length) embed.addFields(fields);
+    return embed;
+};
+
+const sendThought = async (client, payload) => {
+    if (!BOBS_THOUGHTS) return;
+    try {
+        const channel = await client.channels.fetch(BOBS_THOUGHTS);
+        if (!channel || !channel.isTextBased()) return;
+        await channel.send(payload);
+    } catch (err) {
+        logger.debug(`Failed to send thought log: ${err.message}`);
+    }
+};
 
 /**
  * @description Renders the stats embed.
@@ -626,6 +675,7 @@ export const setupMessageListener = (client) => {
             // Trigger criteria: contains "bob", mentions bot, or is a reply to Bob
             if (containsBob || isMentioned || isReplyToBob) {
                 logger.info(`N8N Triggered by ${message.author.tag}: ${message.content}`);
+                const sessionId = crypto.randomUUID();
                 
                 // Show typing indicator
                 try {
@@ -647,17 +697,48 @@ export const setupMessageListener = (client) => {
                     prompt: message.content,
                     user: message.author.username,
                     userId: message.author.id,
+                    sessionId,
                     channelId: message.channelId,
+                    thoughtsChannelId: BOBS_THOUGHTS,
                     messageId: message.id,
                     statusMessageId: statusMessage?.id,
                     timestamp: message.createdAt
                 };
 
+                registerSession(sessionId, {
+                    channelId: message.channelId,
+                    statusMessageId: statusMessage?.id,
+                    userId: message.author.id,
+                    userTag: message.author.tag,
+                    prompt: message.content
+                });
+
+                await sendThought(client, {
+                    embeds: [
+                        buildThoughtEmbed('Bob -> n8n', [
+                            { name: 'Session', value: sessionId },
+                            { name: 'User', value: `${message.author.tag} (${message.author.id})` },
+                            { name: 'Source Channel', value: message.channelId },
+                            { name: 'Prompt', value: truncate(message.content, 700) }
+                        ])
+                    ]
+                });
+
                 // Send to n8n
                 const response = await askN8N(payload);
 
+                await sendThought(client, {
+                    embeds: [
+                        buildThoughtEmbed('n8n Webhook Response', [
+                            { name: 'Session', value: sessionId },
+                            { name: 'Status', value: response.ok ? `OK (${response.status || 'n/a'})` : `ERROR (${response.status || 'n/a'})` },
+                            { name: 'Body', value: truncate(JSON.stringify(response.data || response.error || 'no body'), 900) }
+                        ], response.ok ? 0x2ecc71 : 0xe74c3c)
+                    ]
+                });
+
                 // If askN8N returns null, it means the request itself failed
-                if (!response) {
+                if (!response.ok) {
                     const errorMsg = "❌ **Bob is currently busy or having trouble thinking. Please try again in a bit.**";
                     if (statusMessage) {
                         try {
@@ -673,6 +754,7 @@ export const setupMessageListener = (client) => {
                         }
                     }
                     logger.warn('No response received from n8n or an error occurred.');
+                    clearSession(sessionId);
                 }
                 // Note: The actual AI response will be handled via the REST API callback
             }
@@ -685,26 +767,46 @@ export const setupMessageListener = (client) => {
 /**
  * @description Handles the AI response callback from n8n.
  * @param {import('discord.js').Client} client - The Discord client.
+ * @param {string} sessionId - The session ID for the request.
  * @param {object} data - The response data from n8n.
  */
-export async function handleAiResponse(client, data) {
-    const { response, channelId, statusMessageId, error } = data;
-    
-    logger.debug(`Handling AI response callback: ${JSON.stringify(data)}`);
+export async function handleAiResponse(client, sessionId, data) {
+    const { response, error } = data || {};
+    const session = sessionId ? getSession(sessionId) : null;
+    const targetChannelId = session?.channelId;
+    const targetStatusMessageId = session?.statusMessageId;
+
+    logger.debug(`Handling AI response callback (session ${sessionId || 'n/a'}): ${JSON.stringify(data)}`);
+
+    await sendThought(client, {
+        embeds: [
+            buildThoughtEmbed('n8n Callback', [
+                { name: 'Session', value: sessionId || 'n/a' },
+                { name: 'Known Session', value: session ? 'yes' : 'no' },
+                { name: 'Error', value: error ? truncate(String(error), 700) : 'none' },
+                { name: 'Response', value: response ? truncate(String(response), 700) : 'none' }
+            ], error ? 0xe74c3c : 0x3498db)
+        ]
+    });
+
+    if (!session || !targetChannelId) {
+        logger.error(`No session found for AI response (session ${sessionId || 'n/a'}).`);
+        return;
+    }
 
     try {
-        const channel = await client.channels.fetch(channelId);
+        const channel = await client.channels.fetch(targetChannelId);
         if (!channel || !channel.isTextBased()) {
-            logger.error(`Could not find channel ${channelId} for AI response.`);
+            logger.error(`Could not find channel ${targetChannelId} for AI response.`);
             return;
         }
 
         let statusMessage;
-        if (statusMessageId) {
+        if (targetStatusMessageId) {
             try {
-                statusMessage = await channel.messages.fetch(statusMessageId);
+                statusMessage = await channel.messages.fetch(targetStatusMessageId);
             } catch (err) {
-                logger.debug(`Could not find status message ${statusMessageId}: ${err.message}`);
+                logger.debug(`Could not find status message ${targetStatusMessageId}: ${err.message}`);
             }
         }
 
@@ -715,6 +817,7 @@ export async function handleAiResponse(client, data) {
             } else {
                 await channel.send(errorMsg);
             }
+            clearSession(sessionId);
             return;
         }
 
@@ -725,6 +828,7 @@ export async function handleAiResponse(client, data) {
             } else {
                 await channel.send(reply);
             }
+            clearSession(sessionId);
         } else {
             const warnMsg = "⚠️ **Bob had a blank thought. Please try again.**";
             if (statusMessage) {
@@ -732,6 +836,7 @@ export async function handleAiResponse(client, data) {
             } else {
                 await channel.send(warnMsg);
             }
+            clearSession(sessionId);
         }
     } catch (err) {
         logger.error(`Error in handleAiResponse: ${err.message}`);

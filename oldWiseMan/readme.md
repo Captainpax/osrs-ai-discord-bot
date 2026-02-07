@@ -1,164 +1,62 @@
 # Old Wise Man API
 
-A robust Node.js 22 API for Old School RuneScape (OSRS) integration, profile management, and server settings.
+HTTP API for OSRS stats, wiki lookups, pricing, profiles, and caching.
 
-## Features
+## Requirements
 
-- **OSRS Integration**: Fetch player stats, skills, boss kills, clues, and minigame scores using `oldschooljs`.
-- **Wiki Search**: Search the OSRS Wiki directly from the API.
-- **Profile Management**: Create, login, link OSRS accounts, and manage user profiles.
-- **Authentication**: JWT-based security for sensitive operations.
-- **Server Settings**: Store and retrieve per-guild settings (e.g., for Discord bots).
-- **Custom Logger**: Colorized logging with debug levels and timestamps.
-- **Database**: Persistent storage using MongoDB and Mongoose.
-- **Clean Boot**: Graceful startup and shutdown sequences.
+- Node.js 22+
+- MongoDB
 
-## Prerequisites
+## Environment Variables
 
-- **Node.js**: Version 22 or higher.
-- **MongoDB**: A running MongoDB instance (local or Atlas).
+Uses the root `.env` file.
 
-## Installation
+Required:
+- `OLD_WISE_MAN_PORT` (default `8888`)
+- `MONGODB_URI`
+- `JWT_SECRET`
 
-1. Navigate to the `oldWiseMan` directory:
-   ```bash
-   cd oldWiseMan
-   ```
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-## Configuration
-
-Create a `.env` file in the `oldWiseMan` root directory with the following variables:
-
-```env
-OLD_WISE_MAN_PORT=8888
-DEBUG=true
-MONGODB_URI=mongodb://your-mongodb-uri
-JWT_SECRET=your-secure-secret-key
-```
-
-## Running the Application
-
-To start the server:
+## Local Run
 
 ```bash
+npm install
 npm start
 ```
 
-The server will initialize the MongoDB connection and start listening on the configured `OLD_WISE_MAN_PORT`.
+## Core Endpoints
 
-## API Documentation
+Health:
+- `GET /health`
 
-### Public Endpoints
+OSRS:
+- `GET /osrs/ping`
+- `GET /osrs/stats/:identifier`
+- `GET /osrs/stats/:identifier/skill/:skill`
+- `GET /osrs/stats/:identifier/boss/:boss`
+- `GET /osrs/stats/:identifier/clues/:clue`
+- `GET /osrs/stats/:identifier/minigames/:minigame`
+- `GET /osrs/wiki/:query`
+- `GET /osrs/wiki/page/:title`
+- `GET /osrs/price/:item`
+- `GET /osrs/quest/:name`
+- `GET /osrs/boss/:name`
 
-#### Health Check
-- **URL**: `GET /health`
-- **Description**: Checks if the API is running.
-- **Response**: `200 OK`
+Profiles:
+- `POST /profile/create`
+- `POST /profile/login`
+- `POST /profile/logout`
+- `POST /profile/ensure`
+- `POST /profile/link` (JWT)
+- `POST /profile/unlink` (JWT)
+- `POST /profile/levels`
+- `DELETE /profile/delete` (JWT)
 
-#### OSRS Ping
-- **URL**: `GET /osrs/ping`
-- **Description**: Pings OSRS Hiscores to check connectivity and latency.
+Settings:
+- `POST /settings/server`
+- `GET /settings/server/:guildId`
 
-#### OSRS Wiki
-- **URL**: `GET /osrs/wiki/:query`
-- **Description**: Searches the OSRS Wiki.
+## Notes
 
-### Profile Endpoints
+- Uses MongoDB TTL caching for wiki and price data.
+- Hiscores pings are used for OSRS connectivity checks.
 
-#### Create Profile
-- **URL**: `POST /profile/create`
-- **Body**:
-  ```json
-  { "uuid": "12345", "username": "WiseGuy" }
-  ```
-
-#### Login
-- **URL**: `POST /profile/login`
-- **Description**: Logs in and returns a JWT token.
-- **Body**:
-  ```json
-  { "uuid": "12345" }
-  ```
-
-#### Logout
-- **URL**: `POST /profile/logout`
-- **Body**:
-  ```json
-  { "uuid": "12345" }
-  ```
-
-#### Get Levels
-- **URL**: `POST /profile/levels`
-- **Description**: Fetches OSRS levels for the linked account.
-- **Body**:
-  ```json
-  { "uuid": "12345" }
-  ```
-
-#### Link OSRS Account (Authenticated)
-- **URL**: `POST /profile/link`
-- **Headers**: `Authorization: Bearer <token>`
-- **Body**:
-  ```json
-  { "uuid": "12345", "osrsName": "Zezima" }
-  ```
-
-#### Delete Profile (Authenticated)
-- **URL**: `DELETE /profile/delete`
-- **Headers**: `Authorization: Bearer <token>`
-- **Body**:
-  ```json
-  { "uuid": "12345" }
-  ```
-
-### OSRS Stats Endpoints
-
-All stats endpoints support `identifier` as a `uuid`, `username`, or `osrsName`.
-
-- **Full Stats**: `GET /osrs/stats/:identifier`
-- **Skill**: `GET /osrs/stats/:identifier/skill/:skill`
-- **Boss**: `GET /osrs/stats/:identifier/boss/:boss`
-- **Clues**: `GET /osrs/stats/:identifier/clues/:clue`
-- **Minigames**: `GET /osrs/stats/:identifier/minigames/:minigame`
-
-### Server Settings Endpoints
-
-#### Update Settings
-- **URL**: `POST /settings/server`
-- **Body**:
-  ```json
-  { 
-    "guildId": "987654321", 
-    "prefix": "!", 
-    "settings": { "welcomeChannel": "123" } 
-  }
-  ```
-
-#### Get Settings
-- **URL**: `GET /settings/server/:guildId`
-
-## Caching
-
-The API uses a MongoDB-backed caching system for OSRS Wiki data and GE prices to reduce external API load and improve performance.
-
-- **Storage**: Cached data is stored in the `caches` collection.
-- **TTL**: Entries automatically expire from the database after 7 days (managed by MongoDB TTL index).
-- **Cleanup**: You can manually clear the cache using npm scripts:
-  - `npm run cache:clear` — Clears the entire cache.
-  - `npm run cache:clear <prefix>` — Clears entries starting with a specific prefix (e.g., `osrs:wiki:`).
-
-## Project Structure
-
-- `src/api/`: Express application, routes, and middleware.
-- `src/osrs/`: OSRS specific logic, wiki lookups, and connection utilities.
-- `src/storage/`: MongoDB models and connection handling.
-- `src/utility/`: Centralized variables and logger.
-- `initmain.mjs`: Main entry point.
-
-## License
-
-ISC

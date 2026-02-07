@@ -1,39 +1,35 @@
-### n8n Workflows for Bob
+# n8n Workflows
 
-This directory contains n8n workflows for Bob's AI capabilities.
+Workflow definitions used by Bob's AI agent.
 
-#### Bob Prompt Workflow (`bob-prompt.json`)
+## Bob Prompt Workflow
 
-This workflow allows Bob to respond to messages using LocalAI. It listens for a POST request on the `/webhook/bob-prompt` endpoint.
+File: `n8n/workflows/bob-prompt.json`
 
-**Setup Instructions:**
+Key behavior:
+- Webhook: `POST /webhook/bob-prompt`
+- Immediate response: "thinking" status
+- AI Agent: LocalAI + Redis memory + OSRS tools + health tool
+- Callback: `POST BOB_URL/ai/callback/:sessionId`
 
-1. Open your n8n instance (usually at `http://localhost:5678`).
-2. **Setup Credentials:**
-    - Go to the **Credentials** tab on the left.
-    - Click **Add Credential** and search for **OpenAI API**.
-    - For LocalAI, enter any string as the **API Key** (it's required by n8n but ignored by LocalAI).
-    - If you are using real OpenAI, enter your actual key.
-3. Click on the **Workflows** tab on the left.
-4. Click on the **Add Workflow** button (top right).
-5. Click on the three dots menu (**...**) in the top right and select **Import from File**.
-6. Select the `n8n/workflows/bob-prompt.json` file from this project.
-7. Once imported, click the **Save** button.
-8. Click the **Active** toggle in the top right to enable the production webhook.
+## Setup
 
-**Technical Details:**
+1. Open n8n (default `http://localhost:5678`).
+2. Add credentials:
+   - OpenAI API (LocalAI can use any key string)
+   - Redis (`redis:6379`)
+3. Import the workflow JSON.
+4. Save and activate the workflow.
 
-- **Webhook Path:** `bob-prompt`
-- **Method:** `POST`
-- **Nodes:**
-    - **Webhook**: Receives the prompt from Bob.
-    - **Respond to Webhook**: Returns an immediate "processing" status to Bob.
-    - **AI Agent1**: The core brain that processes the prompt using the model, memory, and tools.
-    - **OpenAI Chat Model**: Connects to your LocalAI instance using environment variables (`AI_BASE_URL` and `AI_MODEL`). **Note:** You must select the OpenAI API credential you created in step 2.
-    - **Simple Memory**: Provides conversational memory for the agent.
-    - **HTTP Request**: A generic tool that allows the AI Agent to fetch information from the web.
-    - **OSRS Stats Tool**: A specialized tool for looking up OSRS player statistics from the Old Wise Man API.
-    - **Edit Fields**: Pass-through or transformation node before callback.
-    - **Bob Callback**: Sends the final AI-generated response back to Bob's REST API.
+## Required Env
 
-**Note:** Ensure your LocalAI service is running and accessible at the address specified in your `.env` file.
+- `N8N_WEBHOOK_URL`
+- `N8N_API_KEY`
+- `BOB_URL`
+- `AI_BASE_URL`, `AI_MODEL`
+
+## Notes
+
+- Bob passes `sessionId`, `channelId`, and `thoughtsChannelId` in the webhook payload.
+- Use `BOBS_THOUGHTS` to capture debug logs in Discord.
+
