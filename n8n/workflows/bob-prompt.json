@@ -1,0 +1,248 @@
+{
+  "name": "Bob Chat Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "bob-prompt",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a6b7c8d9-1234-4567-890a-bcdef0123456",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        112,
+        240
+      ],
+      "webhookId": "bob-prompt"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"processing\"\n}",
+        "options": {}
+      },
+      "id": "c8d9e0f1-3456-6789-01bc-def012345678",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        288,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://bob:8889/ai/callback",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"response\": \"{{ $json.output || 'I couldn\\'t think of anything to say.' }}\",\n  \"channelId\": \"{{ $node[\\\"Webhook\\\"].json.body.channelId }}\",\n  \"statusMessageId\": \"{{ $node[\\\"Webhook\\\"].json.body.statusMessageId }}\",\n  \"user\": \"{{ $node[\\\"Webhook\\\"].json.body.user }}\"\n}",
+        "options": {}
+      },
+      "id": "d9e0f1a2-4567-7890-12cd-ef0123456789",
+      "name": "Bob Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1024,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $node[\"Webhook\"].json.body.user }} says: {{ $node[\"Webhook\"].json.body.prompt }}",
+        "options": {
+          "systemMessage": "You are Bob, a helpful and friendly OSRS assistant bot. You talk to users about Old School RuneScape. Keep your responses helpful, clean, and concise. You have access to the Old Wise Man API at http://old-wise-man:8888. Available endpoints:\n- GET /osrs/stats/{identifier} : Get player stats (levels, XP).\n- GET /osrs/wiki/{query} : Search OSRS Wiki.\n- GET /osrs/price/{item} : Get GE prices.\n- GET /osrs/quest/search/{query} : Search quests.\n- GET /osrs/boss/search/{query} : Search bosses.\nUse the HTTP Request tool to call these endpoints when needed."
+        },
+        "sessionId": "={{ $node[\"Webhook\"].json.body.channelId }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        464,
+        240
+      ],
+      "id": "0637c65e-28cd-4d10-848f-185f87f74c57",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        800,
+        240
+      ],
+      "id": "25d8473c-560d-423c-8fba-9ed4faea8275",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "model": "={{ $env.AI_MODEL }}",
+        "options": {
+          "baseURL": "={{ $env.AI_BASE_URL }}/v1"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        384,
+        448
+      ],
+      "id": "39378cd8-027a-4a93-b6e1-13a87f5b6124",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {},
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        528,
+        448
+      ],
+      "id": "22f077ca-26f9-47d1-a144-70f75cc11799",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        688,
+        448
+      ],
+      "id": "fcd9ce83-d704-4d56-aaa9-001a47ebfd70",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "name": "get_osrs_stats",
+        "description": "Get OSRS stats for a player. Provide the OSRS username or Discord ID.",
+        "method": "GET",
+        "url": "=http://old-wise-man:8888/osrs/stats/{{ $parameter.identifier }}",
+        "parameters": {
+          "parameter": [
+            {
+              "name": "identifier",
+              "description": "The OSRS username or Discord ID",
+              "required": true
+            }
+          ]
+        }
+      },
+      "id": "osrs-stats-tool",
+      "name": "OSRS Stats Tool",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [
+        750,
+        560
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Bob Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OSRS Stats Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  }
+}
