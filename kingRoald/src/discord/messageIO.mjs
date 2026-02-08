@@ -87,6 +87,8 @@ const renderSummaryEmbed = (report) => {
     });
 
     const load = report.system?.load?.map(l => l.toFixed(2)).join(', ') || 'n/a';
+    const cpuUsage = report.system?.cpu?.usagePercent;
+    const cpuText = cpuUsage !== undefined ? `${cpuUsage.toFixed(2)}%` : 'n/a';
     const mem = report.system?.memory;
     const memText = mem ? `${formatBytes(mem.used)} / ${formatBytes(mem.total)} (${mem.usedPercent}% used)` : 'n/a';
 
@@ -108,6 +110,7 @@ const renderSummaryEmbed = (report) => {
             { name: 'PST Time', value: report.timePST || 'n/a', inline: true },
             { name: 'Hostname', value: report.hostname || 'n/a', inline: true },
             { name: 'Uptime', value: formatSeconds(report.system?.uptimeSeconds), inline: true },
+            { name: 'CPU', value: cpuText, inline: true },
             { name: 'Load (1/5/15)', value: load, inline: true },
             { name: 'Memory', value: memText, inline: true },
             { name: 'GPU', value: gpuText, inline: true }

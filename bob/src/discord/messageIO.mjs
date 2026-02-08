@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { MessageFlags, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import logger from '../utility/logger.mjs';
-import { BOBS_CHAT, BOBS_THOUGHTS } from '../utility/loadedVariables.mjs';
+import { BOBS_CHAT, BOBS_THOUGHTS, BOB_ALLOWED_BOT_IDS } from '../utility/loadedVariables.mjs';
 import { ensureProfileAndToken, linkOsrsName, unlinkOsrsName, getStats, priceLookup, searchQuests, getBoss, searchBosses, getBossStats, getBossPet, searchWiki, getWikiPage } from '../utility/wiseApi.mjs';
 import { askN8N } from '../ai/n8n/index.mjs';
 
@@ -37,6 +37,13 @@ const SKILL_LAYOUT = [
     ['hitpoints', 'agility', 'herblore', 'thieving', 'crafting', 'fletching', 'slayer', 'hunter'],
     ['mining', 'smithing', 'fishing', 'cooking', 'firemaking', 'woodcutting', 'farming', 'overall']
 ];
+
+const ALLOWED_BOT_IDS = new Set(
+    (BOB_ALLOWED_BOT_IDS || '')
+        .split(',')
+        .map(id => id.trim())
+        .filter(Boolean)
+);
 
 const SESSION_TTL_MS = 15 * 60 * 1000;
 const SESSION_CLEANUP_MS = 5 * 60 * 1000;
@@ -644,8 +651,8 @@ export const setupInteractionHandler = (client) => {
  */
 export const setupMessageListener = (client) => {
     client.on('messageCreate', async message => {
-        // Ignore bot messages
-        if (message.author.bot) return;
+        // Ignore bot messages unless explicitly allowed
+        if (message.author.bot && !ALLOWED_BOT_IDS.has(message.author.id)) return;
 
         // Only listen in BOBS_CHAT if configured
         if (BOBS_CHAT && message.channelId === BOBS_CHAT) {
@@ -721,7 +728,12 @@ export const setupMessageListener = (client) => {
 
                 // If askN8N returns null, it means the request itself failed
                 if (!response.ok) {
-                    const errorMsg = "❌ **Bob is currently busy or having trouble thinking. Please try again in a bit.**";
+                    let errorMsg = "❌ **Bob is currently busy or having trouble thinking. Please try again in a bit.**";
+                    if (response.status === 404) {
+                        errorMsg = "⚠️ **Bob's brain link is offline.** The n8n workflow isn't active yet. Please try again shortly.";
+                    } else if (response.status === 401 || response.status === 403) {
+                        errorMsg = "⚠️ **Bob's brain link is unauthorized.** The n8n API key may be invalid.";
+                    }
                     if (statusMessage) {
                         try {
                             await statusMessage.edit(errorMsg);

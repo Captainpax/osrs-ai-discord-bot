@@ -31,7 +31,6 @@ app.get('/health', async (req, res) => {
             version: process.env.npm_package_version,
             dependencies: [
                 { name: 'old-wise-man', type: 'http', url: `${OLD_WISE_MAN_URL}/health`, timeoutMs: 3000 },
-                { name: 'king-roald', type: 'http', url: `${process.env.KING_ROALD_URL || 'http://king-roald:8890'}/health`, timeoutMs: 3000, skipIfMissing: true },
                 { name: 'n8n', type: 'http', url: n8nHealthUrl, timeoutMs: 3000, skipIfMissing: true },
                 { name: 'local-ai', type: 'http', url: localAiHealthUrl, timeoutMs: 3000, skipIfMissing: true },
                 {

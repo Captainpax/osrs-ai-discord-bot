@@ -78,6 +78,7 @@ services:
       - N8N_PORT=5678
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
       - NODE_NO_WARNINGS=1
+      - N8N_WEBHOOK_URL=http://n8n:5678
       - AI_BASE_URL=${AI_BASE_URL}
       - AI_MODEL=${AI_MODEL}
     env_file:

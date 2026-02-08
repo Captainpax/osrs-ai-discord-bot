@@ -1,4 +1,4 @@
-# n8n Workflows
+﻿# n8n Workflows
 
 Workflow definitions used by Bob's AI agent.
 
@@ -8,12 +8,15 @@ File: `n8n/workflows/bob-prompt.json`
 
 Key behavior:
 - Webhook: `POST /webhook/bob-prompt`
-- Immediate response: "thinking" status
+- Health shortcut: status questions route directly to `GET BOB_URL/health`
 - AI Agent: LocalAI + Redis memory + OSRS tools + health tool
 - Callback: `POST BOB_URL/ai/callback/:sessionId`
 
 ## Setup
 
+Bob attempts to sync this workflow on startup if `N8N_API_KEY` is set.
+
+Manual import steps:
 1. Open n8n (default `http://localhost:5678`).
 2. Add credentials:
    - OpenAI API (LocalAI can use any key string)
@@ -32,4 +35,3 @@ Key behavior:
 
 - Bob passes `sessionId`, `channelId`, and `thoughtsChannelId` in the webhook payload.
 - Use `BOBS_THOUGHTS` to capture debug logs in Discord.
-

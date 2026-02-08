@@ -1,11 +1,14 @@
-# Old Wise Man API
+﻿# Old Wise Man API
 
 HTTP API for OSRS stats, wiki lookups, pricing, profiles, and caching.
 
-## Requirements
+## Responsibilities
 
-- Node.js 22+
-- MongoDB
+- OSRS hiscores and skill lookups
+- Wiki, boss, quest, and price search
+- Profile linking and authentication
+- MongoDB-backed caching
+- `GET /health` with system metrics and OSRS ping
 
 ## Environment Variables
 
@@ -59,4 +62,3 @@ Settings:
 
 - Uses MongoDB TTL caching for wiki and price data.
 - Hiscores pings are used for OSRS connectivity checks.
-

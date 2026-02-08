@@ -108,8 +108,7 @@ export async function ensureWorkflowExists() {
         let workflowData;
         try {
             const fileContent = await fs.readFile(workflowPath, 'utf8');
-            // Prefill environment variables before parsing
-            const prefilledContent = prefillWorkflow(fileContent);
+            const prefilledContent = prefillWorkflow(stripBom(fileContent));
             workflowData = JSON.parse(prefilledContent);
         } catch (fileError) {
             logger.error(`Could not read workflow file at ${workflowPath}: ${fileError.message}`);
@@ -162,18 +161,25 @@ export async function ensureWorkflowExists() {
 }
 
 /**
- * @description Replaces n8n-style environment variable placeholders with actual values.
- * e.g., "={{ $env.AI_MODEL || 'gpt-4' }}" -> "gpt-4" (or process.env.AI_MODEL)
+ * @description Replaces $env references with literal values so n8n doesn't require env access at runtime.
  * @param {string} content - The JSON string content of the workflow.
  * @returns {string} The processed content.
  */
 function prefillWorkflow(content) {
-    // Regex matches {{ $env.VAR_NAME || 'DEFAULT' }} or {{ $env.VAR_NAME }}
-    return content.replace(/\{\{\s*\$env\.([A-Z0-9_]+)\s*(?:\|\|\s*'([^']*)')?\s*}}/g, (match, varName, defaultValue) => {
-        const value = process.env[varName] || defaultValue || '';
-        logger.debug(`Prefilling workflow var ${varName} with "${value}"`);
-        return value;
+    return content.replace(/\$env\.([A-Z0-9_]+)/g, (match, varName) => {
+        const rawValue = process.env[varName] ?? '';
+        const safeValue = String(rawValue).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+        return `'${safeValue}'`;
     });
+}
+
+/**
+ * @description Removes a UTF-8 BOM if present.
+ * @param {string} content - File content.
+ * @returns {string} Content without BOM.
+ */
+function stripBom(content) {
+    return content.replace(/^\uFEFF/, '');
 }
 
 export default {

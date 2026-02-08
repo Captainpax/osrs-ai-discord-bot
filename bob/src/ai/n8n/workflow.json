@@ -5,15 +5,15 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "bob-prompt",
-        "responseMode": "responseNode",
         "options": {}
       },
+      "webhookId": "bob-prompt",
       "id": "7662c19e-7654-4785-8f6f-876934c7526b",
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        208,
+        -48,
         304
       ]
     },
@@ -24,61 +24,47 @@
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
       "position": [
-        208,
+        -48,
         112
       ]
     },
     {
       "parameters": {
-        "jsCode": "console.log('--- Bob Prompt Start ---');\nconst item = $input.item?.json || {};\nconst body = item.body || item;\nconsole.log('Session:', body.sessionId || 'n/a');\nconsole.log('Source Channel:', body.channelId || 'n/a');\nconsole.log('Thoughts Channel:', body.thoughtsChannelId || 'n/a');\nconsole.log('Payload:', JSON.stringify($input.all(), null, 2));\nreturn $input.all();"
+        "jsCode": "console.log('--- Bob Prompt Start ---');\nconst items = $input.all();\nitems.forEach((item) => {\n  const json = item.json || {};\n  const body = json.body || json;\n  const chatInput = String(body.prompt || json.prompt || '');\n  json.chatInput = chatInput;\n  const normalized = chatInput.toLowerCase();\n  json.isHealthCheck = [\n    'how are you',\n    'how are you doing',\n    'status',\n    'health',\n    'online',\n    'uptime',\n    'ping'\n  ].some((phrase) => normalized.includes(phrase)) ? 1 : 0;\n  json.isGreeting = /^(hi|hello|hey|yo|sup|hiya|howdy)\\b/.test(normalized) ? 1 : 0;\n  const tokens = normalized.replace(/[^a-z0-9 ]/g, ' ').split(/\\s+/).filter(Boolean);\n  const tokenSet = new Set(tokens);\n  const skillMap = [\n    { key: 'attack', aliases: ['attack', 'atk'] },\n    { key: 'strength', aliases: ['strength', 'str'] },\n    { key: 'defence', aliases: ['defence', 'defense', 'def'] },\n    { key: 'ranged', aliases: ['ranged', 'range'] },\n    { key: 'prayer', aliases: ['prayer', 'pray'] },\n    { key: 'magic', aliases: ['magic', 'mage'] },\n    { key: 'runecraft', aliases: ['runecraft', 'runecrafting', 'rc'] },\n    { key: 'construction', aliases: ['construction', 'con'] },\n    { key: 'hitpoints', aliases: ['hitpoints', 'hp'] },\n    { key: 'agility', aliases: ['agility', 'agi'] },\n    { key: 'herblore', aliases: ['herblore', 'herb'] },\n    { key: 'thieving', aliases: ['thieving', 'thief'] },\n    { key: 'crafting', aliases: ['crafting', 'craft'] },\n    { key: 'fletching', aliases: ['fletching', 'fletch'] },\n    { key: 'slayer', aliases: ['slayer'] },\n    { key: 'hunter', aliases: ['hunter'] },\n    { key: 'mining', aliases: ['mining', 'mine'] },\n    { key: 'smithing', aliases: ['smithing', 'smith'] },\n    { key: 'fishing', aliases: ['fishing', 'fish'] },\n    { key: 'cooking', aliases: ['cooking', 'cook'] },\n    { key: 'firemaking', aliases: ['firemaking', 'fm'] },\n    { key: 'woodcutting', aliases: ['woodcutting', 'wc', 'woodcut'] },\n    { key: 'farming', aliases: ['farming', 'farm'] },\n    { key: 'overall', aliases: ['overall', 'total'] }\n  ];\n  let skillName = null;\n  for (const skill of skillMap) {\n    if (skill.aliases.some((alias) => tokenSet.has(alias))) {\n      skillName = skill.key;\n      break;\n    }\n  }\n  const wantsSkill = ['my', 'me', 'level', 'lvl', 'stats', 'stat', 'skill'].some((word) => tokenSet.has(word));\n  json.skillName = skillName;\n  json.isSkillLookup = skillName && wantsSkill ? 1 : 0;\n  json.skillIdentifier = body.userId || json.userId || '';\n});\nconst first = items[0]?.json || {};\nconst body = first.body || first;\nconsole.log('Session:', body.sessionId || 'n/a');\nconsole.log('Source Channel:', body.channelId || 'n/a');\nconsole.log('Thoughts Channel:', body.thoughtsChannelId || 'n/a');\nconsole.log('Payload:', JSON.stringify(items, null, 2));\nreturn items;"
       },
       "id": "4d7c5b6b-3e5a-4b7e-9d2a-4c5b6b7e8f9a",
       "name": "Log Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        432,
+        96,
         208
       ]
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "{\n  \"status\": \"thinking\",\n  \"message\": \"Bob is processing your request...\"\n}",
-        "options": {}
-      },
-      "id": "b3c4d5e6-f7g8-h9i0-j1k2-l3m4n5o6p7q8",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [
-        432,
-        400
-      ]
-    },
-    {
-      "parameters": {
-        "promptType": "define",
+        "agent": "conversationalAgent",
         "text": "={{ $json.body?.prompt || $json.prompt || \"Hello!\" }}",
         "options": {
-          "systemMessage": "You are Bob, the ultimate Old School RuneScape (OSRS) Sage. Your goal is to aid players by providing accurate game data using your specialized tools.\nPersonality:\n- Be legendary, wise, yet approachable.\n- Use OSRS slang naturally (gz, gl, ironman btw, sit, pleae, smite, lucker).\n- Keep responses concise and well-formatted for Discord (use bolding, lists, and emojis).\n\nConversation Rules:\n- If the user is just chatting, greeting, or asking about how you feel, respond directly without calling tools.\n- Only call OSRS tools when the user explicitly asks for stats, prices, quest info, boss info, or wiki lookups.\n- Keep small talk short, friendly, and do not invent game data.\n\nTool Usage Guidelines:\n- ALWAYS check stats using 'get_osrs_stats' if a user asks 'what are my stats' or 'check [username]'.\n- Use 'get_item_price' for Grand Exchange values, alch prices, and item info.\n- Use 'get_quest_info' for requirements and rewards.\n- Use 'get_boss_info' for stats, weaknesses, and pet rates.\n- Use 'search_osrs_wiki' as a fallback for general game knowledge, mechanics, and lore.\n- Use 'get_health_report' when a user asks about bot/service status, uptime, or system health.\n\nStructured Output:\n- Fill the schema with: reply (Discord-ready message) and intent (smalltalk | stats_lookup | price_lookup | quest_info | boss_info | wiki_search | health_check | other).\n\nResponse Strategy:\n- For health responses, summarize first (overall status, key services), then provide concise bullets (latency, uptime, CPU/mem, GPU if available). Do not dump raw JSON.\n- If a tool returns no data, explain why (e.g., 'Player not found on highscores') and suggest an alternative.\n- Proactively suggest related info (e.g., if checking an item price, maybe mention its alch value).\n- If the user isn't linked, kindly remind them they can link their account with `/os link [username]`.\n- Always aim to be the most helpful OSRS expert in the realm."
+          "systemMessage": "You are Bob, the ultimate Old School RuneScape (OSRS) Sage. Your goal is to aid players by providing accurate game data using your specialized tools.\nPersonality:\n- Be legendary, wise, yet approachable.\n- Use OSRS slang naturally (gz, gl, ironman btw, sit, pleae, smite, lucker).\n- Keep responses concise and well-formatted for Discord (use bolding, lists, and emojis).\n\nConversation Rules:\n- If the user is just chatting, greeting, or asking about how you feel, respond directly without calling tools, unless they explicitly want system status.\n- If the user asks \"how are you doing\" or \"are you online\", treat it as a health check and call the health tool.\n- Only call OSRS tools when the user explicitly asks for stats, prices, quest info, boss info, or wiki lookups.\n- Keep small talk short, friendly, and do not invent game data.\n\nTool Usage Guidelines:\n- ALWAYS check stats using 'get_osrs_stats' if a user asks 'what are my stats' or 'check [username]'.\n- Use 'get_item_price' for Grand Exchange values, alch prices, and item info.\n- Use 'get_quest_info' for requirements and rewards.\n- Use 'get_boss_info' for stats, weaknesses, and pet rates.\n- Use 'search_osrs_wiki' as a fallback for general game knowledge, mechanics, and lore.\n- Use 'get_health_report' when a user asks about bot/service status, uptime, or system health (including \"how are you doing?\").\n- For health/status questions, call ONLY 'get_health_report' once.\n- Use at most one tool per reply unless the user explicitly asks for multiple lookups.\n\nResponse Strategy:\n- For health responses, summarize first (overall status, key services), then provide concise bullets (latency, uptime, CPU/mem, GPU if available). Do not dump raw JSON.\n- If a tool returns no data, explain why (e.g., 'Player not found on highscores') and suggest an alternative.\n- Proactively suggest related info (e.g., if checking an item price, maybe mention its alch value).\n- If the user isn't linked, kindly remind them they can link their account with `/os link [username]`.\n- Always aim to be the most helpful OSRS expert in the realm.\n\nTool Call Format (strict):\n- When you decide to call a tool, output ONLY a single JSON object with no extra text.\n- Format example: {{\"action\":\"tool_name\",\"action_input\":{{...}}}}\n- For tools with no parameters, use action_input: {{}}\n- Do NOT include code fences, markdown, or multiple options.\n- If no tool is needed, reply normally with your final answer.",
+          "maxIterations": 4
         }
       },
       "id": "1a2b3c4d-5e6f-7g8h-9i0j-k1l2m3n4o5p6",
       "name": "AI Agent",
       "type": "@n8n/n8n-nodes-langchain.agent",
-      "typeVersion": 1.1,
+      "typeVersion": 1.7,
       "position": [
-        672,
-        208
+        880,
+        272
       ],
       "onError": "continueErrorOutput"
     },
     {
       "parameters": {
-        "model": "={{ $env.AI_MODEL || 'gpt-4' }}",
+        "model": "={{ 'gpt-4' || 'gpt-4' }}",
         "options": {
-          "baseUrl": "={{ $env.AI_BASE_URL || 'http://local-ai:8080' }}/v1"
+          "baseURL": "={{ ('http://local-ai:8080' || 'http://local-ai:8080') + '/v1' }}"
         }
       },
       "id": "chat-model",
@@ -86,8 +72,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1,
       "position": [
-        592,
-        400
+        528,
+        704
       ],
       "credentials": {
         "openAiApi": {
@@ -98,172 +84,158 @@
     },
     {
       "parameters": {
-        "name": "get_osrs_stats",
-        "description": "OSRS Stats Tool. Use this to fetch a player's levels, XP, and combat information from the OSRS highscores. Supports lookup by: OSRS Username, Discord ID (if the user has linked their account), or UUID (internal profile ID).\n\nParameters:\n- identifier (required): The player's username, Discord ID, or UUID.\n\nWhen to use:\n- When a user asks about their own stats or another player's stats.\n- To check if a player meets requirements for a quest or boss.\n- To see combat level or specific skill levels.",
         "toolDescription": "Fetch OSRS highscores for a player (levels, XP, combat). Accepts OSRS username, Discord ID, or UUID.",
-        "method": "GET",
-        "url": "={{ $env.OLD_WISE_MAN_URL || 'http://old-wise-man:8888' }}/osrs/stats/{{ $parameter.identifier }}",
-        "parameters": {
-          "parameter": [
-            {
-              "name": "identifier",
-              "description": "The OSRS username or Discord ID",
-              "required": true
-            }
-          ]
-        }
+        "url": "={{ ('http://old-wise-man:8888' || 'http://old-wise-man:8888') + '/osrs/stats/' + $parameter.identifier }}",
+        "optimizeResponse": true,
+        "fieldsToInclude": "selected",
+        "fields": "osrsName,combatLevel,totalLevel,skills,updatedAt,cached"
       },
       "id": "tool-stats",
       "name": "OSRS Stats",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        768,
-        528
+        1104,
+        928
       ]
     },
     {
       "parameters": {
-        "name": "get_item_price",
-        "description": "OSRS Price Tool. Fetch current Grand Exchange (GE) prices, alch values, and market trends for OSRS items.\n\nParameters:\n- item (required): The exact name of the item.\n\nWhen to use:\n- When a user asks 'how much is [item]?' or 'what is the price of [item]?'.\n- To check high alch values for profit calculation.\n- To evaluate player wealth if items are mentioned.",
         "toolDescription": "Look up an item's current Grand Exchange price and alch values by item name.",
-        "method": "GET",
-        "url": "={{ $env.OLD_WISE_MAN_URL || 'http://old-wise-man:8888' }}/osrs/price/{{ $parameter.item }}",
-        "parameters": {
-          "parameter": [
-            {
-              "name": "item",
-              "description": "The item name",
-              "required": true
-            }
-          ]
-        }
+        "url": "={{ ('http://old-wise-man:8888' || 'http://old-wise-man:8888') + '/osrs/price/' + $parameter.item }}",
+        "optimizeResponse": true,
+        "fieldsToInclude": "selected",
+        "fields": "item.name,price.high,price.low,price.highTime,price.lowTime,alch.high,alch.low,updatedAt,cached"
       },
       "id": "tool-price",
       "name": "get_item_price",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        864,
-        528
+        1104,
+        1360
       ]
     },
     {
       "parameters": {
-        "name": "search_osrs_wiki",
-        "description": "OSRS Wiki Search Tool. Search the official OSRS Wiki for comprehensive game information, mechanics, and lore.\n\nParameters:\n- query (required): The search term or topic.\n\nWhen to use:\n- For general questions about game mechanics, locations, NPCs, or items not related to price.\n- When you need a direct link to the wiki for more details.\n- As a fallback for any game knowledge you aren't 100% sure about.",
         "toolDescription": "Search the official OSRS Wiki for mechanics, locations, NPCs, or general game info.",
-        "method": "GET",
-        "url": "={{ $env.OLD_WISE_MAN_URL || 'http://old-wise-man:8888' }}/osrs/wiki/{{ $parameter.query }}",
-        "parameters": {
-          "parameter": [
-            {
-              "name": "query",
-              "description": "Search query",
-              "required": true
-            }
-          ]
-        }
+        "url": "={{ ('http://old-wise-man:8888' || 'http://old-wise-man:8888') + '/osrs/wiki/' + $parameter.query }}",
+        "optimizeResponse": true,
+        "dataField": "results",
+        "fieldsToInclude": "selected",
+        "fields": "title,extract,url,image"
       },
       "id": "tool-wiki",
       "name": "search_osrs_wiki",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        768,
-        640
+        1104,
+        1216
       ]
     },
     {
       "parameters": {
-        "name": "get_quest_info",
-        "description": "OSRS Quest Tool. Retrieve detailed information about OSRS quests, including requirements, rewards, and difficulty.\n\nParameters:\n- name (required): The name of the quest.\n\nWhen to use:\n- When a user asks about quest requirements, rewards, or how to start a quest.\n- To help players plan their account progression.",
         "toolDescription": "Get quest details (requirements, rewards, difficulty) by quest name.",
-        "method": "GET",
-        "url": "={{ $env.OLD_WISE_MAN_URL || 'http://old-wise-man:8888' }}/osrs/quest/{{ $parameter.name }}",
-        "parameters": {
-          "parameter": [
-            {
-              "name": "name",
-              "description": "The quest name",
-              "required": true
-            }
-          ]
-        }
+        "url": "={{ ('http://old-wise-man:8888' || 'http://old-wise-man:8888') + '/osrs/quest/' + $parameter.name }}",
+        "optimizeResponse": true,
+        "fieldsToInclude": "selected",
+        "fields": "title,extract,questDetails.start,questDetails.requirements,questDetails.rewards,questDetails.difficulty,questDetails.length,updatedAt,cached"
       },
       "id": "tool-quest",
       "name": "get_quest_info",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        864,
-        640
+        1104,
+        1072
       ]
     },
     {
       "parameters": {
-        "name": "get_boss_info",
-        "description": "OSRS Boss Tool. Get OSRS boss details, including combat stats, weaknesses, drop tables, and pet information.\n\nParameters:\n- name (required): The name of the boss.\n\nWhen to use:\n- When a user asks for boss strategies, weaknesses (e.g., 'what is Zulrah weak to?'), or pet drop rates.\n- To provide info on specific boss drops.",
         "toolDescription": "Get boss stats, weaknesses, notable drops, and pet information by boss name.",
-        "method": "GET",
-        "url": "={{ $env.OLD_WISE_MAN_URL || 'http://old-wise-man:8888' }}/osrs/boss/{{ $parameter.name }}",
-        "parameters": {
-          "parameter": [
-            {
-              "name": "name",
-              "description": "The boss name",
-              "required": true
-            }
-          ]
-        }
+        "url": "={{ ('http://old-wise-man:8888' || 'http://old-wise-man:8888') + '/osrs/boss/' + $parameter.name }}",
+        "optimizeResponse": true,
+        "fieldsToInclude": "selected",
+        "fields": "title,extract,bossDetails.location,bossDetails.drops,pet.name,pet.chance,updatedAt,cached"
       },
       "id": "tool-boss",
       "name": "get_boss_info",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        960,
-        528
+        1104,
+        1504
       ]
     },
     {
       "parameters": {
-        "name": "get_health_report",
-        "description": "Health Check Tool. Fetch overall system health, service status, uptime, and resource metrics (CPU, memory, GPU if available).\n\nParameters: none\n\nWhen to use:\n- When a user asks if Bob or the services are online.\n- When a user asks about uptime or system health.",
         "toolDescription": "Get cluster health summary with uptime, service status, and system resource metrics.",
-        "method": "GET",
-        "url": "={{ $env.BOB_URL || 'http://bob:8889' }}/health"
+        "url": "={{ ('http://bob:8889' || 'http://bob:8889') + '/health' }}",
+        "optimizeResponse": true,
+        "fieldsToInclude": "selected",
+        "fields": "status,timePST,services,system.uptimeSeconds,system.memory.usedPercent,gpu.available,gpu.error"
       },
       "id": "tool-health",
       "name": "get_health_report",
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1,
       "position": [
-        1056,
-        640
+        1104,
+        784
       ]
     },
     {
       "parameters": {
-        "jsonSchema": "{\n  \"title\": \"BobResponse\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"reply\": { \"type\": \"string\", \"description\": \"Discord-ready response for the user.\" },\n    \"intent\": { \"type\": \"string\", \"description\": \"High-level intent of the reply.\", \"enum\": [\"smalltalk\", \"stats_lookup\", \"price_lookup\", \"quest_info\", \"boss_info\", \"wiki_search\", \"other\"] }\n  },\n  \"required\": [\"reply\", \"intent\"]\n}",
-        "outputKey": "reply"
+        "jsonSchema": "{\n  \"title\": \"BobResponse\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"reply\": { \"type\": \"string\", \"description\": \"Discord-ready response for the user.\" },\n    \"intent\": { \"type\": \"string\", \"description\": \"High-level intent of the reply.\", \"enum\": [\"smalltalk\", \"stats_lookup\", \"price_lookup\", \"quest_info\", \"boss_info\", \"wiki_search\", \"health_check\", \"other\"] }\n  },\n  \"required\": [\"reply\", \"intent\"]\n}",
+        "autoFix": true
       },
       "id": "structured-output",
       "name": "Structured Output",
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1,
       "position": [
-        976,
-        160
+        832,
+        752
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'You are a formatter. Return a single JSON object only. No markdown, no code fences. ' +\n'Keys required: reply (string), intent (one of smalltalk, stats_lookup, price_lookup, quest_info, boss_info, wiki_search, health_check, other). ' +\n'If unsure, use intent=other. ' +\n'Example: {\"reply\":\"Hello!\",\"intent\":\"smalltalk\"}. ' +\n'Assistant response: ' + ($json.output || $json.response || $json.message || $json.text || $json.reply || '') }}",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "id": "8e8c6d2b-05cf-4f79-9c28-2d8d4b5fbf2a",
+      "name": "Format Response",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        784,
+        528
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $json.output || $json.response || $json.message || $json.text || '';\nconst reply = typeof output === 'string' ? output : JSON.stringify(output);\nreturn [{ json: { reply, intent: 'other' } }];"
+      },
+      "id": "f7a6b5c4-d3e2-1f0a-9b8c-7d6e5f4a3b2c",
+      "name": "Format Fallback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        0
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.BOB_URL || 'http://bob:8889' }}/ai/callback/{{ $json.body?.sessionId || $json.sessionId || $('Log Request').item.json.body?.sessionId || $('Log Request').item.json.sessionId }}",
+        "url": "={{ ('http://bob:8889' || 'http://bob:8889') + '/ai/callback/' + ($json.body?.sessionId || $json.sessionId || $('Log Request').item.json.body?.sessionId || $('Log Request').item.json.sessionId) }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"response\": \"{{ $json.reply || $json.output?.reply || $json.output || $json.response || $json.message }}\",\n  \"channelId\": \"{{ $('Log Request').item.json.body?.channelId || $('Log Request').item.json.channelId }}\",\n  \"statusMessageId\": \"{{ $('Log Request').item.json.body?.statusMessageId || $('Log Request').item.json.statusMessageId }}\",\n  \"success\": true\n}",
+        "jsonBody": "={{ {\n  response: $json.reply || $json.output?.reply || $json.output || $json.response || $json.message,\n  channelId: $('Log Request').item.json.body?.channelId || $('Log Request').item.json.channelId,\n  statusMessageId: $('Log Request').item.json.body?.statusMessageId || $('Log Request').item.json.statusMessageId,\n  success: true\n} }}",
         "options": {}
       },
       "id": "0a1b2c3d-4e5f-6g7h-8i9j-k0l1m2n3o4p5",
@@ -271,17 +243,17 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        1200,
-        160
+        768,
+        192
       ]
     },
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.BOB_URL || 'http://bob:8889' }}/ai/callback/{{ $json.body?.sessionId || $json.sessionId || $('Log Request').item.json.body?.sessionId || $('Log Request').item.json.sessionId }}",
+        "url": "={{ ('http://bob:8889' || 'http://bob:8889') + '/ai/callback/' + ($json.body?.sessionId || $json.sessionId || $('Log Request').item.json.body?.sessionId || $('Log Request').item.json.sessionId) }}",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"error\": \"{{ $json.message || 'AI Agent encountered an error' }}\",\n  \"channelId\": \"{{ $('Log Request').item.json.body?.channelId || $('Log Request').item.json.channelId }}\",\n  \"statusMessageId\": \"{{ $('Log Request').item.json.body?.statusMessageId || $('Log Request').item.json.statusMessageId }}\",\n  \"success\": false\n}",
+        "jsonBody": "={{ {\n  error: $json.message || 'AI Agent encountered an error',\n  channelId: $('Log Request').item.json.body?.channelId || $('Log Request').item.json.channelId,\n  statusMessageId: $('Log Request').item.json.body?.statusMessageId || $('Log Request').item.json.statusMessageId,\n  success: false\n} }}",
         "options": {}
       },
       "id": "f5e4d3c2-b1a0-9g8h-7i6j-5k4l3m2n1o0p",
@@ -290,7 +262,7 @@
       "typeVersion": 4.1,
       "position": [
         1200,
-        352
+        288
       ]
     },
     {
@@ -301,8 +273,8 @@
       "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
       "typeVersion": 1.5,
       "position": [
-        720,
-        400
+        1168,
+        544
       ],
       "id": "cf6bc3b5-f7a1-462e-abe4-2f68917586db",
       "name": "Redis Chat Memory",
@@ -312,6 +284,137 @@
           "name": "Redis account"
         }
       }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.isHealthCheck }}",
+              "operation": "equal",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "b7f4d7e1-7f0c-4c10-9a3f-1c2d3e4f5a6b",
+      "name": "Is Health Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        288,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.isGreeting }}",
+              "operation": "equal",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "c1d2e3f4-5678-90ab-cdef-1234567890ab",
+      "name": "Is Greeting",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        288,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const reply = \"Hey! I'm here. Ask me about stats, prices, quests, bosses, or the wiki.\";\nreturn [{ json: { reply, intent: 'smalltalk' } }];"
+      },
+      "id": "d2c3b4a5-6789-01bc-def2-3456789012bc",
+      "name": "Greeting Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.isSkillLookup }}",
+              "operation": "equal",
+              "value2": 1
+            }
+          ]
+        }
+      },
+      "id": "e3f4a5b6-7890-12cd-ef34-5678901234cd",
+      "name": "Is Skill Lookup",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        288,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ ('http://old-wise-man:8888') + '/osrs/stats/' + $json.skillIdentifier + '/skill/' + $json.skillName }}",
+        "options": {}
+      },
+      "id": "f4a5b6c7-8901-23de-f456-78901234de56",
+      "name": "Skill Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        464,
+        384
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.item?.json || {};\nconst errorMessage = data.error?.message || data.error || data.message || null;\nif (errorMessage || !data.osrsName) {\n  const reply = \"I couldn't find that player on the hiscores. If this is you, link your account with /os link <name>.\";\n  return [{ json: { reply, intent: 'stats_lookup' } }];\n}\nconst skill = data.skill || $json.skillName || 'skill';\nconst cap = skill.charAt(0).toUpperCase() + skill.slice(1);\nconst level = data.level ?? 'n/a';\nconst xp = typeof data.xp === 'number' ? data.xp.toLocaleString() : null;\nconst rank = typeof data.rank === 'number' ? data.rank.toLocaleString() : null;\nlet reply = `**${cap}** for **${data.osrsName || 'Unknown'}**: Level **${level}**`;\nif (xp) reply += `, XP **${xp}**`;\nif (rank) reply += `, Rank **${rank}**`;\nif (data.cached) reply += ' (cached)';\nreturn [{ json: { reply, intent: 'stats_lookup' } }];"
+      },
+      "id": "a5b6c7d8-9012-34ef-5678-901234ef5678",
+      "name": "Skill Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ ('http://bob:8889') + '/health' }}",
+        "options": {}
+      },
+      "id": "c2f9d3a1-4b5c-6d7e-8f9a-0b1c2d3e4f5a",
+      "name": "Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        464,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const health = $input.item?.json || {};\nconst status = health.status || 'UNKNOWN';\nconst time = health.timePST || health.timestamp || '';\nconst services = Array.isArray(health.services) ? health.services : [];\nconst serviceSummary = services.length ? services.map(s => `${s.name}: ${s.status}`).join(', ') : '';\nconst mem = health.system?.memory?.usedPercent;\nconst cpu = health.system?.cpu?.usagePercent;\nconst uptimeSeconds = health.system?.uptimeSeconds;\nconst load = Array.isArray(health.system?.load) ? health.system.load.map(v => Number(v).toFixed(2)).join(', ') : '';\nconst formatSeconds = (secs = 0) => {\n  const days = Math.floor(secs / 86400);\n  const hours = Math.floor((secs % 86400) / 3600);\n  const minutes = Math.floor((secs % 3600) / 60);\n  const parts = [];\n  if (days) parts.push(`${days}d`);\n  if (hours) parts.push(`${hours}h`);\n  if (minutes) parts.push(`${minutes}m`);\n  if (!parts.length) parts.push(`${Math.floor(secs)}s`);\n  return parts.join(' ');\n};\nconst lines = [];\nlines.push(`**Status:** ${status}`);\nif (serviceSummary) lines.push(`**Services:** ${serviceSummary}`);\nif (typeof cpu === 'number') lines.push(`**CPU:** ${cpu.toFixed(1)}%`);\nif (typeof mem === 'number') lines.push(`**Memory:** ${mem.toFixed(1)}%`);\nif (typeof uptimeSeconds === 'number') lines.push(`**Uptime:** ${formatSeconds(uptimeSeconds)}`);\nif (load) lines.push(`**Load:** ${load}`);\nif (time) lines.push(`**Time:** ${time}`);\nconst response = lines.join('\\n');\nreturn [{ json: { response, intent: 'health_check' } }];"
+      },
+      "id": "d4e5f6a7-8b9c-0d1e-2f3a-4b5c6d7e8f9a",
+      "name": "Health Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        0
+      ]
     }
   ],
   "pinData": {},
@@ -321,11 +424,6 @@
         [
           {
             "node": "Log Request",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
@@ -347,7 +445,7 @@
       "main": [
         [
           {
-            "node": "AI Agent",
+            "node": "Is Health Check",
             "type": "main",
             "index": 0
           }
@@ -358,7 +456,7 @@
       "main": [
         [
           {
-            "node": "Callback Success",
+            "node": "Format Response",
             "type": "main",
             "index": 0
           }
@@ -372,11 +470,50 @@
         ]
       ]
     },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Callback Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Fallback": {
+      "main": [
+        [
+          {
+            "node": "Callback Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "LocalAI Chat Model": {
       "ai_languageModel": [
         [
           {
             "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Format Response",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Structured Output",
             "type": "ai_languageModel",
             "index": 0
           }
@@ -387,7 +524,7 @@
       "ai_outputParser": [
         [
           {
-            "node": "AI Agent",
+            "node": "Format Response",
             "type": "ai_outputParser",
             "index": 0
           }
@@ -470,10 +607,134 @@
           }
         ]
       ]
+    },
+    "Is Health Check": {
+      "main": [
+        [
+          {
+            "node": "Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Greeting",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Greeting": {
+      "main": [
+        [
+          {
+            "node": "Greeting Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Skill Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Skill Lookup": {
+      "main": [
+        [
+          {
+            "node": "Skill Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skill Lookup": {
+      "main": [
+        [
+          {
+            "node": "Skill Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skill Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skill Reply": {
+      "main": [
+        [
+          {
+            "node": "Callback Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Greeting Reply": {
+      "main": [
+        [
+          {
+            "node": "Callback Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check": {
+      "main": [
+        [
+          {
+            "node": "Health Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Summary": {
+      "main": [
+        [
+          {
+            "node": "Callback Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
   "settings": {
-    "executionOrder": "v1"
-  }
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "8d04296d-199c-4878-b165-dfebcf29b525",
+  "meta": {
+    "instanceId": "9a3c1ce180d6c36adae76bbdb64a1ece777a6b1c8285f378d5482dc3c290cd8d"
+  },
+  "id": "P700bLggEb4UuSip",
+  "tags": []
 }

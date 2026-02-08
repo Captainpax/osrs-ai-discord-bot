@@ -26,6 +26,7 @@ export const AI_MODEL = process.env.AI_MODEL || "gpt-4o-mini";
 export const OLD_WISE_MAN_URL = process.env.OLD_WISE_MAN_URL || 'http://localhost:8888';
 export const BOBS_CHAT = process.env.BOBS_CHAT;
 export const BOBS_THOUGHTS = process.env.BOBS_THOUGHTS;
+export const BOB_ALLOWED_BOT_IDS = process.env.BOB_ALLOWED_BOT_IDS;
 export const LEADERBOARD_CHANNEL = process.env.LEADERBOARD_CHANNEL;
 export const N8N_WEBHOOK_URL = process.env.N8N_WEBHOOK_URL;
 export const N8N_API_KEY = process.env.N8N_API_KEY;
@@ -46,6 +47,7 @@ export default {
     OLD_WISE_MAN_URL,
     BOBS_CHAT,
     BOBS_THOUGHTS,
+    BOB_ALLOWED_BOT_IDS,
     LEADERBOARD_CHANNEL,
     N8N_WEBHOOK_URL,
     N8N_API_KEY

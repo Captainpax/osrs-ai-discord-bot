@@ -13,7 +13,7 @@ export async function getClusterHealth() {
         serviceName: 'king-roald',
         version: process.env.npm_package_version,
         dependencies: [
-            { name: 'bob', type: 'http', url: `${BOB_URL}/health`, timeoutMs: 3000 },
+            { name: 'bob', type: 'http', url: `${BOB_URL}/health`, timeoutMs: 5000 },
             { name: 'old-wise-man', type: 'http', url: `${OLD_WISE_MAN_URL}/health`, timeoutMs: 3000 },
             { name: 'n8n', type: 'http', url: n8nHealthUrl, timeoutMs: 3000, skipIfMissing: true },
             { name: 'local-ai', type: 'http', url: localAiHealthUrl, timeoutMs: 3000, skipIfMissing: true },
